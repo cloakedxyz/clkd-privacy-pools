@@ -54,17 +54,36 @@ async function entropyToMnemonic(
 }
 
 /**
+ * Domain separator for PP key derivation.
+ * Ensures the PP mnemonic is cryptographically independent from stealth keys,
+ * even though both derive from the same wallet signature.
+ *
+ * The stealth path uses raw signature bytes (r, s components).
+ * The PP path hashes: keccak256(domain || signature).
+ * This domain separation is industry best practice — it guarantees
+ * the two derivation paths cannot leak information about each other.
+ */
+const PP_DOMAIN = 'privacy-pools-v1';
+
+/**
  * Derive a Privacy Pools mnemonic from a wallet signature.
  *
- * In the Cloaked app, the signature comes from:
+ * Uses the same Cloaked stealth signature (genCloakedMessage({pin, address}))
+ * with a domain separator to produce an independent key space.
+ *
+ * The signature comes from:
  * - Wallet + PIN flow: wallet signs a PIN-derived message
  * - PRF flow: same wallet signature, different auth to unlock it
  *
- * The signature is hashed to produce 16 bytes of entropy,
- * which is converted to a 12-word BIP39 mnemonic.
+ * Derivation: keccak256("privacy-pools-v1" || signature) → 16 bytes → BIP39 mnemonic
  */
 export async function deriveMnemonic(signature: Hex): Promise<string> {
-  const sigHash = keccak256(signature);
+  const domainBytes = new TextEncoder().encode(PP_DOMAIN);
+  const sigBytes = hexToBytes(signature);
+  const combined = new Uint8Array(domainBytes.length + sigBytes.length);
+  combined.set(domainBytes);
+  combined.set(sigBytes, domainBytes.length);
+  const sigHash = keccak256(combined as any);
   const entropy = hexToBytes(sigHash).slice(0, 16);
   return entropyToMnemonic(entropy, english);
 }
