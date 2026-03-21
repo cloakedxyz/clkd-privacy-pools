@@ -9,6 +9,10 @@
  *
  * The same wallet + same message = same mnemonic = same secrets.
  * Nothing to store — everything re-derives from the wallet.
+ *
+ * IMPORTANT: The PP mnemonic is derived from the same Cloaked stealth
+ * signature (genCloakedMessage({pin, address})). This means one signature
+ * recovers both stealth addresses and PP deposits. No separate signing needed.
  */
 
 import { keccak256, hexToBytes, type Hex } from 'viem';
@@ -22,8 +26,6 @@ import {
   getCommitment,
   type MasterKeys,
 } from '@0xbow/privacy-pools-core-sdk';
-
-export const PP_SIGN_MESSAGE = 'Cloaked Privacy Pools Key Derivation v1';
 
 /**
  * Minimal BIP39 entropyToMnemonic.

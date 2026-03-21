@@ -1,6 +1,5 @@
 // Key derivation
 export {
-  PP_SIGN_MESSAGE,
   deriveMnemonic,
   deriveMasterKeys,
   deriveDepositSecrets,
