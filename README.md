@@ -46,10 +46,10 @@ const { depositsByPrecommitment } = await scanPoolEvents(
 
 ## Supported chains
 
-| Chain | ID | ASP API |
-|-------|-----|---------|
-| Ethereum | 1 | api.0xbow.io |
-| Sepolia | 11155111 | dw.0xbow.io |
+| Chain    | ID       | ASP API      |
+| -------- | -------- | ------------ |
+| Ethereum | 1        | api.0xbow.io |
+| Sepolia  | 11155111 | dw.0xbow.io  |
 
 ## Security
 
