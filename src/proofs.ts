@@ -110,10 +110,7 @@ export async function generateWithdrawalProof(
     params.stateLeaves,
     commitment.hash
   );
-  const aspMerkleProof = generateMerkleProof(
-    params.aspLeaves,
-    params.label
-  );
+  const aspMerkleProof = generateMerkleProof(params.aspLeaves, params.label);
 
   const { nullifier: newNullifier, secret: newSecret } =
     deriveWithdrawalSecrets(params.masterKeys, params.label, 0n);
@@ -144,10 +141,7 @@ export async function generateWithdrawalProof(
   );
 
   return {
-    proof: formatProof(
-      withdrawalProof.proof,
-      withdrawalProof.publicSignals
-    ),
+    proof: formatProof(withdrawalProof.proof, withdrawalProof.publicSignals),
     raw: withdrawalProof,
   };
 }

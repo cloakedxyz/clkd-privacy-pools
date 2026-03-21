@@ -20,8 +20,7 @@ export interface ChainConfig {
   pools: Record<string, PoolConfig>;
 }
 
-const ETH_ASSET =
-  '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as `0x${string}`;
+const ETH_ASSET = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as `0x${string}`;
 
 export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
   // Ethereum Mainnet

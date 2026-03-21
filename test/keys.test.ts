@@ -51,8 +51,7 @@ describe('deriveMnemonic', () => {
   it('domain separator: mnemonic differs from raw keccak256 of signature', async () => {
     // Verify domain separation is active — the mnemonic should NOT be
     // what you'd get from keccak256(signature) without the domain prefix
-    const { keccak256, hexToBytes } = await import('viem');
-    const { english } = await import('viem/accounts');
+    const { keccak256, hexToBytes, encodePacked } = await import('viem');
 
     const sig = await getTestSignature();
 
@@ -60,11 +59,11 @@ describe('deriveMnemonic', () => {
     const rawHash = keccak256(sig);
     const rawEntropy = hexToBytes(rawHash).slice(0, 16);
 
-    // What our function produces (with domain separation)
-    const mnemonic = await deriveMnemonic(sig);
+    // Verify deriveMnemonic produces a result (uses domain separation internally)
+    const _mnemonic = await deriveMnemonic(sig);
+    expect(_mnemonic.split(' ')).toHaveLength(12);
 
     // Verify the domain-separated hash differs from the raw hash
-    const { encodePacked } = await import('viem');
     const domainHash = keccak256(
       encodePacked(['string', 'bytes'], ['privacy-pools-v1', sig])
     );
@@ -170,8 +169,14 @@ describe('computePrecommitment', () => {
     const keys = deriveMasterKeys(mnemonic);
     const secrets = deriveDepositSecrets(keys, 12345n, 0n);
 
-    const a = computePrecommitment(secrets.nullifier as any, secrets.secret as any);
-    const b = computePrecommitment(secrets.nullifier as any, secrets.secret as any);
+    const a = computePrecommitment(
+      secrets.nullifier as any,
+      secrets.secret as any
+    );
+    const b = computePrecommitment(
+      secrets.nullifier as any,
+      secrets.secret as any
+    );
     expect(a).toBe(b);
   });
 
@@ -213,8 +218,18 @@ describe('buildCommitment', () => {
     const keys = deriveMasterKeys(mnemonic);
     const secrets = deriveDepositSecrets(keys, 12345n, 0n);
 
-    const a = buildCommitment(1000n, 99999n, secrets.nullifier as any, secrets.secret as any);
-    const b = buildCommitment(1000n, 99999n, secrets.nullifier as any, secrets.secret as any);
+    const a = buildCommitment(
+      1000n,
+      99999n,
+      secrets.nullifier as any,
+      secrets.secret as any
+    );
+    const b = buildCommitment(
+      1000n,
+      99999n,
+      secrets.nullifier as any,
+      secrets.secret as any
+    );
     expect(a.hash).toBe(b.hash);
   });
 
@@ -224,8 +239,18 @@ describe('buildCommitment', () => {
     const keys = deriveMasterKeys(mnemonic);
     const secrets = deriveDepositSecrets(keys, 12345n, 0n);
 
-    const a = buildCommitment(1000n, 99999n, secrets.nullifier as any, secrets.secret as any);
-    const b = buildCommitment(2000n, 99999n, secrets.nullifier as any, secrets.secret as any);
+    const a = buildCommitment(
+      1000n,
+      99999n,
+      secrets.nullifier as any,
+      secrets.secret as any
+    );
+    const b = buildCommitment(
+      2000n,
+      99999n,
+      secrets.nullifier as any,
+      secrets.secret as any
+    );
     expect(a.hash).not.toBe(b.hash);
   });
 });

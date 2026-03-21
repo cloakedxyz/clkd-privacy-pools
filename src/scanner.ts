@@ -102,9 +102,7 @@ export async function scanPoolEvents(
     }
   }
 
-  const sortedIndices = [...leafByIndex.keys()].sort(
-    (a, b) => Number(a - b)
-  );
+  const sortedIndices = [...leafByIndex.keys()].sort((a, b) => Number(a - b));
   const leaves = sortedIndices.map((idx) => leafByIndex.get(idx)!);
 
   return { leaves, depositsByPrecommitment };

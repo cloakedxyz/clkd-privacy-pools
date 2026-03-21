@@ -139,7 +139,12 @@ export function buildCommitment(
   secret: bigint
 ) {
   const labelHash = bigintToHash(label);
-  return getCommitment(value, labelHash as any, nullifier as any, secret as any);
+  return getCommitment(
+    value,
+    labelHash as any,
+    nullifier as any,
+    secret as any
+  );
 }
 
 export { bigintToHash } from '@0xbow/privacy-pools-core-sdk';
