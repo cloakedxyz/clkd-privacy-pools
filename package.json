@@ -1,6 +1,6 @@
 {
   "name": "@cloakedxyz/clkd-privacy-pools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Privacy Pools key derivation, proof generation, and recovery tools for Cloaked",
   "main": "dist/index.js",
   "module": "dist/index.js",

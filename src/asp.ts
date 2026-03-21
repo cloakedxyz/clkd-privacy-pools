@@ -45,17 +45,29 @@ export async function getDepositStatus(
   chainId: number,
   precommitmentHash: bigint
 ): Promise<DepositEvent | null> {
-  const res = await fetch(
-    `${aspApiBase}/global/public/events?chainId=${chainId}&action=deposit&perPage=20&page=1`
-  );
-  if (!res.ok) return null;
-
-  const data = (await res.json()) as { events: DepositEvent[] };
   const precommitmentStr = precommitmentHash.toString();
+  const maxPages = 10;
 
-  return (
-    data.events.find((e) => e.precommitmentHash === precommitmentStr) ?? null
-  );
+  for (let page = 1; page <= maxPages; page++) {
+    const res = await fetch(
+      `${aspApiBase}/global/public/events?chainId=${chainId}&action=deposit&perPage=50&page=${page}`
+    );
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      events: DepositEvent[];
+      total: number;
+    };
+    const match = data.events.find(
+      (e) => e.precommitmentHash === precommitmentStr
+    );
+    if (match) return match;
+
+    // Stop if we've exhausted all pages
+    if (page * 50 >= data.total) break;
+  }
+
+  return null;
 }
 
 /**
