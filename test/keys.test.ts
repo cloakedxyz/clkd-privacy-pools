@@ -63,16 +63,14 @@ describe('deriveMnemonic', () => {
     // What our function produces (with domain separation)
     const mnemonic = await deriveMnemonic(sig);
 
-    // They should differ because of the domain prefix
-    // We can't easily compute the raw mnemonic here (entropyToMnemonic is private),
-    // but we can verify the hash differs
-    const { toHex, concat } = await import('viem');
-    const domainHex = toHex(new TextEncoder().encode('privacy-pools-v1'));
-    const domainHash = keccak256(concat([domainHex, sig]));
+    // Verify the domain-separated hash differs from the raw hash
+    const { encodePacked } = await import('viem');
+    const domainHash = keccak256(
+      encodePacked(['string', 'bytes'], ['privacy-pools-v1', sig])
+    );
 
     expect(domainHash).not.toBe(rawHash);
 
-    // And the actual mnemonic uses the domain hash
     const domainEntropy = hexToBytes(domainHash).slice(0, 16);
     expect(domainEntropy).not.toEqual(rawEntropy);
   });

@@ -15,7 +15,7 @@
  * recovers both stealth addresses and PP deposits. No separate signing needed.
  */
 
-import { keccak256, hexToBytes, toHex, concat, type Hex } from 'viem';
+import { keccak256, hexToBytes, encodePacked, type Hex } from 'viem';
 import { english } from 'viem/accounts';
 import {
   generateMasterKeys,
@@ -78,8 +78,9 @@ const PP_DOMAIN = 'privacy-pools-v1';
  * Derivation: keccak256("privacy-pools-v1" || signature) → 16 bytes → BIP39 mnemonic
  */
 export async function deriveMnemonic(signature: Hex): Promise<string> {
-  const domainHex = toHex(new TextEncoder().encode(PP_DOMAIN));
-  const sigHash = keccak256(concat([domainHex, signature]));
+  const sigHash = keccak256(
+    encodePacked(['string', 'bytes'], [PP_DOMAIN, signature])
+  );
   const entropy = hexToBytes(sigHash).slice(0, 16);
   return entropyToMnemonic(entropy, english);
 }
