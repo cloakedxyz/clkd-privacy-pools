@@ -50,14 +50,14 @@ const DEPOSITED_EVENT = {
  * @param poolAddress - Privacy Pool contract address
  * @param fromBlock - Start block (inclusive)
  * @param toBlock - End block (inclusive)
- * @param chunkSize - Max blocks per getLogs query (default 50000)
+ * @param chunkSize - Max blocks per getLogs query (default 1000, safe for public RPCs)
  */
 export async function scanPoolEvents(
   client: PublicClient,
   poolAddress: `0x${string}`,
   fromBlock: bigint,
   toBlock: bigint,
-  chunkSize = 50000n
+  chunkSize = 1000n
 ): Promise<ScanResult> {
   const depositsByPrecommitment = new Map<bigint, DepositRecord>();
   const leafByIndex = new Map<bigint, bigint>();
