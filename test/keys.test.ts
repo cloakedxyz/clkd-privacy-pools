@@ -65,7 +65,7 @@ describe('deriveMnemonic', () => {
 
     // Verify the domain-separated hash differs from the raw hash
     const domainHash = keccak256(
-      encodePacked(['string', 'bytes'], ['privacy-pools-v1', sig])
+      encodePacked(['string', 'bytes'], ['privacy-pools-v1-sig', sig])
     );
 
     expect(domainHash).not.toBe(rawHash);

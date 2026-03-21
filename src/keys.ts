@@ -54,16 +54,18 @@ async function entropyToMnemonic(
 }
 
 /**
- * Domain separator for PP key derivation.
- * Ensures the PP mnemonic is cryptographically independent from stealth keys,
- * even though both derive from the same root entropy.
+ * Domain separators for PP key derivation.
+ *
+ * Each auth flow gets its own domain to guarantee the two paths can never
+ * produce the same hash, even though encodePacked concatenates without
+ * length prefixes. Without separate domains, a 64-byte input on one path
+ * could theoretically collide with a different 64-byte input on the other.
  *
  * Stealth keys use the raw entropy directly (signature r,s or PRF outputs).
- * PP keys hash: keccak256(encodePacked("privacy-pools-v1", entropy)).
- * This domain separation guarantees the two derivation paths cannot leak
- * information about each other.
+ * PP keys hash: keccak256(encodePacked(domain, entropy)).
  */
-const PP_DOMAIN = 'privacy-pools-v1';
+const PP_DOMAIN_SIG = 'privacy-pools-v1-sig';
+const PP_DOMAIN_PRF = 'privacy-pools-v1-prf';
 
 /**
  * Derive a Privacy Pools mnemonic from user entropy.
@@ -97,7 +99,7 @@ export async function deriveMnemonic(
   if ('signature' in input) {
     // Wallet + PIN: domain-separate the full signature
     entropy = keccak256(
-      encodePacked(['string', 'bytes'], [PP_DOMAIN, input.signature])
+      encodePacked(['string', 'bytes'], [PP_DOMAIN_SIG, input.signature])
     );
   } else {
     // PRF: combine both secrets with domain separation
@@ -106,7 +108,7 @@ export async function deriveMnemonic(
     entropy = keccak256(
       encodePacked(
         ['string', 'bytes', 'bytes'],
-        [PP_DOMAIN, input.spendSecret, input.viewSecret]
+        [PP_DOMAIN_PRF, input.spendSecret, input.viewSecret]
       )
     );
   }
