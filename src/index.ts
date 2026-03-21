@@ -13,6 +13,7 @@ export {
 // Chain scanning
 export {
   scanPoolEvents,
+  findDepositsByAddress,
   findUserDeposits,
   getPoolState,
   type ScanResult,

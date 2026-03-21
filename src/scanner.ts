@@ -111,11 +111,68 @@ export async function scanPoolEvents(
 }
 
 /**
+ * Find all deposits made by a specific address by filtering Deposited events.
+ *
+ * This is the most reliable recovery method — it uses the indexed `_depositor`
+ * field to filter events directly via getLogs, so it finds every deposit
+ * regardless of index. No brute-forcing needed.
+ *
+ * @param client - viem PublicClient
+ * @param poolAddress - Privacy Pool contract address
+ * @param depositorAddress - The address that made the deposits
+ * @param fromBlock - Start block (inclusive)
+ * @param toBlock - End block (inclusive)
+ * @param chunkSize - Max blocks per getLogs query (default 1000)
+ * @param onProgress - Optional progress callback
+ */
+export async function findDepositsByAddress(
+  client: PublicClient,
+  poolAddress: `0x${string}`,
+  depositorAddress: `0x${string}`,
+  fromBlock: bigint,
+  toBlock: bigint,
+  chunkSize = 1000n,
+  onProgress?: (scanned: bigint, total: bigint) => void
+): Promise<DepositRecord[]> {
+  const deposits: DepositRecord[] = [];
+  const totalBlocks = toBlock - fromBlock;
+
+  for (let start = fromBlock; start <= toBlock; start += chunkSize) {
+    const end =
+      start + chunkSize - 1n > toBlock ? toBlock : start + chunkSize - 1n;
+
+    if (onProgress) {
+      onProgress(start - fromBlock, totalBlocks);
+    }
+
+    const events = await client.getLogs({
+      address: poolAddress,
+      event: DEPOSITED_EVENT,
+      args: { _depositor: depositorAddress },
+      fromBlock: start,
+      toBlock: end,
+    });
+
+    for (const e of events) {
+      const args = e.args as any;
+      deposits.push({
+        commitment: args._commitment as bigint,
+        label: args._label as bigint,
+        value: args._value as bigint,
+      });
+    }
+  }
+
+  return deposits;
+}
+
+/**
  * Find all deposits made by a specific wallet by iterating through
  * deposit indices and checking precommitments.
  *
- * Used for recovery: given a wallet signature, re-derive secrets for
- * index 0, 1, 2, ... and scan the chain for matching deposits.
+ * Use findDepositsByAddress for recovery (more reliable — finds all deposits
+ * regardless of index). This function is useful when you need to match
+ * deposits to specific indices for proof generation.
  *
  * @param scanResult - Pre-scanned chain data
  * @param computePrecommitment - Function that computes precommitment for a given index
