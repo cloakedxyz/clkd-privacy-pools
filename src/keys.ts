@@ -56,33 +56,63 @@ async function entropyToMnemonic(
 /**
  * Domain separator for PP key derivation.
  * Ensures the PP mnemonic is cryptographically independent from stealth keys,
- * even though both derive from the same wallet signature.
+ * even though both derive from the same root entropy.
  *
- * The stealth path uses raw signature bytes (r, s components).
- * The PP path hashes: keccak256(domain || signature).
- * This domain separation is industry best practice — it guarantees
- * the two derivation paths cannot leak information about each other.
+ * Stealth keys use the raw entropy directly (signature r,s or PRF outputs).
+ * PP keys hash: keccak256(encodePacked("privacy-pools-v1", entropy)).
+ * This domain separation guarantees the two derivation paths cannot leak
+ * information about each other.
  */
 const PP_DOMAIN = 'privacy-pools-v1';
 
 /**
- * Derive a Privacy Pools mnemonic from a wallet signature.
+ * Derive a Privacy Pools mnemonic from user entropy.
  *
- * Uses the same Cloaked stealth signature (genCloakedMessage({pin, address}))
- * with a domain separator to produce an independent key space.
+ * Supports both Cloaked auth flows:
  *
- * The signature comes from:
- * - Wallet + PIN flow: wallet signs a PIN-derived message
- * - PRF flow: same wallet signature, different auth to unlock it
+ * **Wallet + PIN flow** — pass the ECDSA signature directly:
+ * ```ts
+ * const mnemonic = await deriveMnemonic({ signature: sig });
+ * ```
  *
- * Derivation: keccak256("privacy-pools-v1" || signature) → 16 bytes → BIP39 mnemonic
+ * **PRF/passkey flow** — pass the two PRF outputs:
+ * ```ts
+ * const prfResults = assertion.getClientExtensionResults().prf.results;
+ * const mnemonic = await deriveMnemonic({
+ *   spendSecret: toHex(prfResults.first),
+ *   viewSecret: toHex(prfResults.second),
+ * });
+ * ```
+ *
+ * Both paths produce a deterministic 12-word BIP39 mnemonic via domain-separated
+ * keccak256 hashing. The same inputs always produce the same mnemonic.
+ *
+ * @param input - Either `{ signature }` (wallet+PIN) or `{ spendSecret, viewSecret }` (PRF)
  */
-export async function deriveMnemonic(signature: Hex): Promise<string> {
-  const sigHash = keccak256(
-    encodePacked(['string', 'bytes'], [PP_DOMAIN, signature])
-  );
-  const entropy = hexToBytes(sigHash).slice(0, 16);
-  return entropyToMnemonic(entropy, english);
+export async function deriveMnemonic(
+  input: { signature: Hex } | { spendSecret: Hex; viewSecret: Hex }
+): Promise<string> {
+  let entropy: Hex;
+
+  if ('signature' in input) {
+    // Wallet + PIN: domain-separate the full signature
+    entropy = keccak256(
+      encodePacked(['string', 'bytes'], [PP_DOMAIN, input.signature])
+    );
+  } else {
+    // PRF: combine both secrets with domain separation
+    // Uses both spendSecret and viewSecret to ensure the mnemonic depends
+    // on the full PRF output, not just one half.
+    entropy = keccak256(
+      encodePacked(
+        ['string', 'bytes', 'bytes'],
+        [PP_DOMAIN, input.spendSecret, input.viewSecret]
+      )
+    );
+  }
+
+  const entropyBytes = hexToBytes(entropy).slice(0, 16);
+  return entropyToMnemonic(entropyBytes, english);
 }
 
 /**

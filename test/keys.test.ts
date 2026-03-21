@@ -24,7 +24,7 @@ async function getTestSignature() {
 describe('deriveMnemonic', () => {
   it('produces a 12-word BIP39 mnemonic', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const words = mnemonic.split(' ');
     expect(words).toHaveLength(12);
     // Each word should be non-empty
@@ -35,16 +35,16 @@ describe('deriveMnemonic', () => {
 
   it('is deterministic — same signature produces same mnemonic', async () => {
     const sig = await getTestSignature();
-    const mnemonic1 = await deriveMnemonic(sig);
-    const mnemonic2 = await deriveMnemonic(sig);
+    const mnemonic1 = await deriveMnemonic({ signature: sig });
+    const mnemonic2 = await deriveMnemonic({ signature: sig });
     expect(mnemonic1).toBe(mnemonic2);
   });
 
   it('different signatures produce different mnemonics', async () => {
     const sig1 = await TEST_ACCOUNT.signMessage({ message: 'message-1' });
     const sig2 = await TEST_ACCOUNT.signMessage({ message: 'message-2' });
-    const mnemonic1 = await deriveMnemonic(sig1);
-    const mnemonic2 = await deriveMnemonic(sig2);
+    const mnemonic1 = await deriveMnemonic({ signature: sig1 });
+    const mnemonic2 = await deriveMnemonic({ signature: sig2 });
     expect(mnemonic1).not.toBe(mnemonic2);
   });
 
@@ -60,7 +60,7 @@ describe('deriveMnemonic', () => {
     const rawEntropy = hexToBytes(rawHash).slice(0, 16);
 
     // Verify deriveMnemonic produces a result (uses domain separation internally)
-    const _mnemonic = await deriveMnemonic(sig);
+    const _mnemonic = await deriveMnemonic({ signature: sig });
     expect(_mnemonic.split(' ')).toHaveLength(12);
 
     // Verify the domain-separated hash differs from the raw hash
@@ -75,10 +75,60 @@ describe('deriveMnemonic', () => {
   });
 });
 
+describe('deriveMnemonic (PRF flow)', () => {
+  // Simulate PRF outputs — two 32-byte secrets
+  const prfFirst =
+    '0x1111111111111111111111111111111111111111111111111111111111111111' as const;
+  const prfSecond =
+    '0x2222222222222222222222222222222222222222222222222222222222222222' as const;
+
+  it('produces a 12-word mnemonic from PRF secrets', async () => {
+    const mnemonic = await deriveMnemonic({
+      spendSecret: prfFirst,
+      viewSecret: prfSecond,
+    });
+    expect(mnemonic.split(' ')).toHaveLength(12);
+  });
+
+  it('is deterministic', async () => {
+    const m1 = await deriveMnemonic({
+      spendSecret: prfFirst,
+      viewSecret: prfSecond,
+    });
+    const m2 = await deriveMnemonic({
+      spendSecret: prfFirst,
+      viewSecret: prfSecond,
+    });
+    expect(m1).toBe(m2);
+  });
+
+  it('different secrets produce different mnemonics', async () => {
+    const m1 = await deriveMnemonic({
+      spendSecret: prfFirst,
+      viewSecret: prfSecond,
+    });
+    const m2 = await deriveMnemonic({
+      spendSecret: prfSecond,
+      viewSecret: prfFirst,
+    });
+    expect(m1).not.toBe(m2);
+  });
+
+  it('PRF mnemonic differs from signature mnemonic', async () => {
+    const sig = await getTestSignature();
+    const sigMnemonic = await deriveMnemonic({ signature: sig });
+    const prfMnemonic = await deriveMnemonic({
+      spendSecret: prfFirst,
+      viewSecret: prfSecond,
+    });
+    expect(sigMnemonic).not.toBe(prfMnemonic);
+  });
+});
+
 describe('deriveMasterKeys', () => {
   it('produces master keys from a mnemonic', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
     expect(keys).toBeDefined();
     expect(keys.masterNullifier).toBeDefined();
@@ -87,7 +137,7 @@ describe('deriveMasterKeys', () => {
 
   it('is deterministic', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys1 = deriveMasterKeys(mnemonic);
     const keys2 = deriveMasterKeys(mnemonic);
     expect(keys1.masterNullifier).toBe(keys2.masterNullifier);
@@ -98,7 +148,7 @@ describe('deriveMasterKeys', () => {
 describe('deriveDepositSecrets', () => {
   it('produces nullifier and secret for a given index', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
     const scope = 12345n;
 
@@ -109,7 +159,7 @@ describe('deriveDepositSecrets', () => {
 
   it('different indices produce different secrets', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
     const scope = 12345n;
 
@@ -122,7 +172,7 @@ describe('deriveDepositSecrets', () => {
 
   it('same index is deterministic', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
     const scope = 12345n;
 
@@ -135,7 +185,7 @@ describe('deriveDepositSecrets', () => {
 
   it('different scopes produce different secrets', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
 
     const a = deriveDepositSecrets(keys, 111n, 0n);
@@ -148,7 +198,7 @@ describe('deriveDepositSecrets', () => {
 describe('computePrecommitment', () => {
   it('produces a valid uint256', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
     const secrets = deriveDepositSecrets(keys, 12345n, 0n);
 
@@ -165,7 +215,7 @@ describe('computePrecommitment', () => {
 
   it('is deterministic', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
     const secrets = deriveDepositSecrets(keys, 12345n, 0n);
 
@@ -182,7 +232,7 @@ describe('computePrecommitment', () => {
 
   it('different secrets produce different precommitments', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
 
     const s0 = deriveDepositSecrets(keys, 12345n, 0n);
@@ -197,7 +247,7 @@ describe('computePrecommitment', () => {
 describe('buildCommitment', () => {
   it('produces a commitment with a hash', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
     const secrets = deriveDepositSecrets(keys, 12345n, 0n);
 
@@ -214,7 +264,7 @@ describe('buildCommitment', () => {
 
   it('is deterministic', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
     const secrets = deriveDepositSecrets(keys, 12345n, 0n);
 
@@ -235,7 +285,7 @@ describe('buildCommitment', () => {
 
   it('different values produce different commitments', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
     const secrets = deriveDepositSecrets(keys, 12345n, 0n);
 
@@ -258,7 +308,7 @@ describe('buildCommitment', () => {
 describe('deriveWithdrawalSecrets', () => {
   it('produces withdrawal secrets', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
 
     const secrets = deriveWithdrawalSecrets(keys, 99999n, 0n);
@@ -268,7 +318,7 @@ describe('deriveWithdrawalSecrets', () => {
 
   it('different labels produce different withdrawal secrets', async () => {
     const sig = await getTestSignature();
-    const mnemonic = await deriveMnemonic(sig);
+    const mnemonic = await deriveMnemonic({ signature: sig });
     const keys = deriveMasterKeys(mnemonic);
 
     const a = deriveWithdrawalSecrets(keys, 11111n, 0n);
