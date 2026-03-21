@@ -51,20 +51,27 @@ const DEPOSITED_EVENT = {
  * @param fromBlock - Start block (inclusive)
  * @param toBlock - End block (inclusive)
  * @param chunkSize - Max blocks per getLogs query (default 1000, safe for public RPCs)
+ * @param onProgress - Optional callback with (scannedBlocks, totalBlocks) for progress tracking
  */
 export async function scanPoolEvents(
   client: PublicClient,
   poolAddress: `0x${string}`,
   fromBlock: bigint,
   toBlock: bigint,
-  chunkSize = 1000n
+  chunkSize = 1000n,
+  onProgress?: (scanned: bigint, total: bigint) => void
 ): Promise<ScanResult> {
   const depositsByPrecommitment = new Map<bigint, DepositRecord>();
   const leafByIndex = new Map<bigint, bigint>();
+  const totalBlocks = toBlock - fromBlock;
 
   for (let start = fromBlock; start <= toBlock; start += chunkSize) {
     const end =
       start + chunkSize - 1n > toBlock ? toBlock : start + chunkSize - 1n;
+
+    if (onProgress) {
+      onProgress(start - fromBlock, totalBlocks);
+    }
 
     const leafEvents = await client.getLogs({
       address: poolAddress,
