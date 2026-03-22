@@ -145,4 +145,11 @@ export const POOL_ABI = [
     outputs: [{ type: 'uint256' }],
     stateMutability: 'view',
   },
+  {
+    type: 'function',
+    name: 'ASSET',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+    stateMutability: 'view',
+  },
 ] as const;
