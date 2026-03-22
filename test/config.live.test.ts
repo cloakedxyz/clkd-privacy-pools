@@ -49,6 +49,15 @@ describe.skipIf(process.env.CI === 'true')(
           expect(scope).toBeTypeOf('bigint');
           expect(scope).toBeGreaterThan(0n);
         });
+
+        it(`${config.chainId}: ${asset} precomputed scope matches on-chain SCOPE()`, async () => {
+          const onChainScope = await client.readContract({
+            address: pool.address as `0x${string}`,
+            abi: POOL_ABI,
+            functionName: 'SCOPE',
+          });
+          expect(pool.scope).toBe(onChainScope);
+        });
       }
     }
   }

@@ -58,6 +58,7 @@ export { ENTRYPOINT_ABI, POOL_ABI } from './abi.js';
 export {
   CHAIN_CONFIGS,
   getChainConfig,
+  computeScope,
   type ChainConfig,
   type PoolConfig,
 } from './config.js';
