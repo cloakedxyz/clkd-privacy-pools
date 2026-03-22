@@ -16,49 +16,46 @@ const CHAINS = {
   },
 } as const;
 
-describe.skipIf(process.env.CI === 'true')(
-  'on-chain address verification',
-  () => {
-    for (const [chainIdStr, config] of Object.entries(CHAIN_CONFIGS)) {
-      const chainId = Number(chainIdStr) as keyof typeof CHAINS;
-      const chainInfo = CHAINS[chainId];
-      if (!chainInfo) continue;
+describe('on-chain address verification', () => {
+  for (const [chainIdStr, config] of Object.entries(CHAIN_CONFIGS)) {
+    const chainId = Number(chainIdStr) as keyof typeof CHAINS;
+    const chainInfo = CHAINS[chainId];
+    if (!chainInfo) continue;
 
-      const client = createPublicClient({
-        chain: chainInfo.chain,
-        transport: http(chainInfo.rpc),
+    const client = createPublicClient({
+      chain: chainInfo.chain,
+      transport: http(chainInfo.rpc),
+    });
+
+    it(`${config.chainId}: entrypoint responds to latestRoot()`, async () => {
+      const root = await client.readContract({
+        address: config.entrypoint,
+        abi: ENTRYPOINT_ABI,
+        functionName: 'latestRoot',
+      });
+      expect(root).toBeTypeOf('bigint');
+      expect(root).toBeGreaterThan(0n);
+    });
+
+    for (const [asset, pool] of Object.entries(config.pools)) {
+      it(`${config.chainId}: ${asset} pool responds to SCOPE()`, async () => {
+        const scope = await client.readContract({
+          address: pool.address as `0x${string}`,
+          abi: POOL_ABI,
+          functionName: 'SCOPE',
+        });
+        expect(scope).toBeTypeOf('bigint');
+        expect(scope).toBeGreaterThan(0n);
       });
 
-      it(`${config.chainId}: entrypoint responds to latestRoot()`, async () => {
-        const root = await client.readContract({
-          address: config.entrypoint,
-          abi: ENTRYPOINT_ABI,
-          functionName: 'latestRoot',
+      it(`${config.chainId}: ${asset} precomputed scope matches on-chain SCOPE()`, async () => {
+        const onChainScope = await client.readContract({
+          address: pool.address as `0x${string}`,
+          abi: POOL_ABI,
+          functionName: 'SCOPE',
         });
-        expect(root).toBeTypeOf('bigint');
-        expect(root).toBeGreaterThan(0n);
+        expect(pool.scope).toBe(onChainScope);
       });
-
-      for (const [asset, pool] of Object.entries(config.pools)) {
-        it(`${config.chainId}: ${asset} pool responds to SCOPE()`, async () => {
-          const scope = await client.readContract({
-            address: pool.address as `0x${string}`,
-            abi: POOL_ABI,
-            functionName: 'SCOPE',
-          });
-          expect(scope).toBeTypeOf('bigint');
-          expect(scope).toBeGreaterThan(0n);
-        });
-
-        it(`${config.chainId}: ${asset} precomputed scope matches on-chain SCOPE()`, async () => {
-          const onChainScope = await client.readContract({
-            address: pool.address as `0x${string}`,
-            abi: POOL_ABI,
-            functionName: 'SCOPE',
-          });
-          expect(pool.scope).toBe(onChainScope);
-        });
-      }
     }
   }
-);
+});
