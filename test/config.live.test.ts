@@ -1,9 +1,10 @@
 /**
- * Live on-chain verification of deployment addresses.
- * Skipped in CI — run manually with: pnpm vitest run test/config.live.test.ts
+ * Live on-chain verification of deployment configuration.
+ * Verifies every address, scope, and cross-reference in CHAIN_CONFIGS
+ * against the actual deployed contracts.
  */
 import { describe, it, expect } from 'vitest';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, getAddress } from 'viem';
 import { mainnet, sepolia } from 'viem/chains';
 import { CHAIN_CONFIGS } from '../src/config';
 import { POOL_ABI, ENTRYPOINT_ABI } from '../src/abi';
@@ -38,14 +39,12 @@ describe('on-chain address verification', () => {
     });
 
     for (const [asset, pool] of Object.entries(config.pools)) {
-      it(`${config.chainId}: ${asset} pool responds to SCOPE()`, async () => {
-        const scope = await client.readContract({
+      it(`${config.chainId}: ${asset} pool has deployed bytecode`, async () => {
+        const code = await client.getCode({
           address: pool.address as `0x${string}`,
-          abi: POOL_ABI,
-          functionName: 'SCOPE',
         });
-        expect(scope).toBeTypeOf('bigint');
-        expect(scope).toBeGreaterThan(0n);
+        expect(code).toBeDefined();
+        expect(code!.length).toBeGreaterThan(2); // more than just '0x'
       });
 
       it(`${config.chainId}: ${asset} precomputed scope matches on-chain SCOPE()`, async () => {
@@ -55,6 +54,27 @@ describe('on-chain address verification', () => {
           functionName: 'SCOPE',
         });
         expect(pool.scope).toBe(onChainScope);
+      });
+
+      it(`${config.chainId}: ${asset} pool ASSET() matches configured assetAddress`, async () => {
+        const onChainAsset = await client.readContract({
+          address: pool.address as `0x${string}`,
+          abi: POOL_ABI,
+          functionName: 'ASSET',
+        });
+        expect(getAddress(onChainAsset as string)).toBe(
+          getAddress(pool.assetAddress)
+        );
+      });
+
+      it(`${config.chainId}: ${asset} entrypoint assetConfig routes to configured pool`, async () => {
+        const [poolFromEntrypoint] = (await client.readContract({
+          address: config.entrypoint,
+          abi: ENTRYPOINT_ABI,
+          functionName: 'assetConfig',
+          args: [pool.assetAddress],
+        })) as [string, bigint, bigint, bigint];
+        expect(getAddress(poolFromEntrypoint)).toBe(getAddress(pool.address));
       });
     }
   }
