@@ -27,10 +27,12 @@ describe('encodeRelayData', () => {
     expect(decoded[2]).toBe(feeBPS);
   });
 
-  it('defaults to zero address and zero fee', () => {
+  it('encodes with zero fee but non-zero feeRecipient', () => {
     const recipient = '0x1111111111111111111111111111111111111111' as Address;
+    const feeRecipient =
+      '0x3333333333333333333333333333333333333333' as Address;
 
-    const encoded = encodeRelayData(recipient);
+    const encoded = encodeRelayData(recipient, feeRecipient);
 
     const decoded = decodeAbiParameters(
       [
@@ -42,13 +44,14 @@ describe('encodeRelayData', () => {
     );
 
     expect(decoded[0].toLowerCase()).toBe(recipient.toLowerCase());
-    expect(decoded[1]).toBe('0x0000000000000000000000000000000000000000');
+    expect(decoded[1].toLowerCase()).toBe(feeRecipient.toLowerCase());
     expect(decoded[2]).toBe(0n);
   });
 
   it('produces valid hex output', () => {
     const encoded = encodeRelayData(
-      '0x1111111111111111111111111111111111111111'
+      '0x1111111111111111111111111111111111111111' as Address,
+      '0x2222222222222222222222222222222222222222' as Address
     );
 
     expect(encoded).toMatch(/^0x[0-9a-f]+$/i);
