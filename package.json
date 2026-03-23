@@ -1,6 +1,6 @@
 {
   "name": "@cloakedxyz/clkd-privacy-pools",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "description": "Privacy Pools key derivation, proof generation, and recovery tools for Cloaked",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -53,7 +53,7 @@
   },
   "packageManager": "pnpm@10.18.0",
   "dependencies": {
-    "@0xbow/privacy-pools-core-sdk": "^1.0.2",
+    "@0xbow/privacy-pools-core-sdk": "1.2.0",
     "viem": "^2.39.2"
   },
   "devDependencies": {
