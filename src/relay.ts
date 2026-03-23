@@ -25,12 +25,13 @@ import { deriveDepositSecrets, deriveWithdrawalSecrets } from './keys.js';
  * Encode the RelayData struct for the withdrawal's data field.
  *
  * @param recipient - Final recipient of the withdrawn funds
- * @param feeRecipient - Address that receives the relay fee (zero address for no fee)
+ * @param feeRecipient - Address that receives the relay fee. Cannot be
+ *   zero address (the contract rejects it even when fee is 0).
  * @param relayFeeBPS - Relay fee in basis points (0 for no fee)
  */
 export function encodeRelayData(
   recipient: Address,
-  feeRecipient: Address = '0x0000000000000000000000000000000000000000',
+  feeRecipient: Address,
   relayFeeBPS: bigint = 0n
 ): Hex {
   return encodeAbiParameters(
@@ -74,8 +75,8 @@ export async function buildRelayedWithdrawalCalldata(
     entrypointAddress: Address;
     /** Final recipient address (encoded in RelayData). */
     recipientAddress: Address;
-    /** Optional relay fee recipient. Defaults to zero address (no fee). */
-    feeRecipient?: Address;
+    /** Address that receives relay fees. Cannot be zero address. */
+    feeRecipient: Address;
     /** Optional relay fee in basis points. Defaults to 0. */
     relayFeeBPS?: bigint;
   }
