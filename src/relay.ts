@@ -57,7 +57,7 @@ export async function buildRelayedWithdrawalCalldata(
   sdk: PrivacyPoolSDK,
   params: {
     masterKeys: MasterKeys;
-    /** On-chain commitment value (wei). */
+    /** Full on-chain commitment value (wei). */
     value: bigint;
     /** On-chain commitment label. */
     label: bigint;
@@ -79,6 +79,10 @@ export async function buildRelayedWithdrawalCalldata(
     feeRecipient: Address;
     /** Optional relay fee in basis points. Defaults to 0. */
     relayFeeBPS?: bigint;
+    /** Amount to withdraw (wei). Must be <= value.
+     *  If less than value, the remainder stays in the pool as a change commitment.
+     *  Defaults to value (full withdrawal). */
+    withdrawalAmount?: bigint;
   }
 ): Promise<Hex> {
   // Derive the correct secrets based on whether this is an original
@@ -114,6 +118,7 @@ export async function buildRelayedWithdrawalCalldata(
     stateLeaves: params.stateLeaves,
     aspLeaves: params.aspLeaves,
     recipient: params.entrypointAddress,
+    withdrawalAmount: params.withdrawalAmount,
     data: relayData,
   });
 
