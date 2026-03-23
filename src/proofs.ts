@@ -94,6 +94,7 @@ export async function generateWithdrawalProof(
   sdk: PrivacyPoolSDK,
   params: {
     masterKeys: MasterKeys;
+    /** Full on-chain commitment value (wei). */
     value: bigint;
     label: bigint;
     nullifier: bigint;
@@ -102,6 +103,10 @@ export async function generateWithdrawalProof(
     stateLeaves: bigint[];
     aspLeaves: bigint[];
     recipient: Address;
+    /** Amount to withdraw (wei). Must be <= value.
+     *  If less than value, the remainder stays in the pool as a change commitment.
+     *  Defaults to value (full withdrawal). */
+    withdrawalAmount?: bigint;
     /** Withdrawal data field. Defaults to '0x' for direct withdrawals.
      *  For relayed withdrawals, pass the ABI-encoded RelayData. */
     data?: Hex;
@@ -132,7 +137,7 @@ export async function generateWithdrawalProof(
 
   const withdrawalProofInput = {
     context: BigInt(context),
-    withdrawalAmount: params.value,
+    withdrawalAmount: params.withdrawalAmount ?? params.value,
     stateMerkleProof,
     aspMerkleProof,
     stateRoot: stateMerkleProof.root as any,
