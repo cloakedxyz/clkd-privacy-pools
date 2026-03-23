@@ -5,7 +5,7 @@
  * and recover deposit metadata. Used for both normal operation and recovery.
  */
 
-import type { PublicClient } from 'viem';
+import type { Address, PublicClient } from 'viem';
 import { POOL_ABI } from './abi.js';
 
 export interface DepositRecord {
@@ -55,7 +55,7 @@ const DEPOSITED_EVENT = {
  */
 export async function scanPoolEvents(
   client: PublicClient,
-  poolAddress: `0x${string}`,
+  poolAddress: Address,
   fromBlock: bigint,
   toBlock: bigint,
   chunkSize = 1000n,
@@ -125,8 +125,8 @@ export async function scanPoolEvents(
  */
 export async function findDepositsByAddress(
   client: PublicClient,
-  poolAddress: `0x${string}`,
-  depositorAddress: `0x${string}`,
+  poolAddress: Address,
+  depositorAddress: Address,
   fromBlock: bigint,
   toBlock: bigint,
   chunkSize = 1000n,
@@ -209,7 +209,7 @@ export function findUserDeposits(
  */
 export async function getPoolState(
   client: PublicClient,
-  poolAddress: `0x${string}`
+  poolAddress: Address
 ): Promise<{ scope: bigint; currentRoot: bigint; treeSize: bigint }> {
   const [scope, currentRoot, treeSize] = await Promise.all([
     client.readContract({

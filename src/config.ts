@@ -9,7 +9,7 @@
  * and verified against the deployed contracts in config.live.test.ts.
  */
 
-import { keccak256, encodePacked } from 'viem';
+import { type Address, keccak256, encodePacked } from 'viem';
 
 /**
  * BN254 scalar field — matches Constants.SNARK_SCALAR_FIELD in the Privacy Pools contracts.
@@ -23,9 +23,9 @@ const SNARK_SCALAR_FIELD =
  * SCOPE = uint256(keccak256(abi.encodePacked(poolAddress, chainId, assetAddress))) % SNARK_SCALAR_FIELD
  */
 export function computeScope(
-  poolAddress: `0x${string}`,
+  poolAddress: Address,
   chainId: number,
-  assetAddress: `0x${string}`
+  assetAddress: Address
 ): bigint {
   const hash = keccak256(
     encodePacked(
@@ -37,23 +37,23 @@ export function computeScope(
 }
 
 export interface PoolConfig {
-  address: `0x${string}`;
+  address: Address;
   type: 'simple' | 'complex';
-  assetAddress: `0x${string}`;
+  assetAddress: Address;
   /** Precomputed pool scope — keccak256(poolAddress, chainId, assetAddress) % SNARK_SCALAR_FIELD */
   scope: bigint;
 }
 
 export interface ChainConfig {
   chainId: number;
-  entrypoint: `0x${string}`;
+  entrypoint: Address;
   startBlock: bigint;
   aspApiBase: string;
   relayerApiBase: string;
   pools: Record<string, PoolConfig>;
 }
 
-const ETH_ASSET = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as `0x${string}`;
+const ETH_ASSET = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as Address;
 
 export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
   // Ethereum Mainnet

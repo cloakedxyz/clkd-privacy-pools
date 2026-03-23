@@ -10,9 +10,14 @@
  * Cloaked uses (our relay wallet submits the tx, not the user).
  */
 
-import { encodeFunctionData, encodeAbiParameters } from 'viem';
+import {
+  type Address,
+  type Hex,
+  encodeFunctionData,
+  encodeAbiParameters,
+} from 'viem';
 import type { PrivacyPoolSDK, MasterKeys } from '@0xbow/privacy-pools-core-sdk';
-import { ENTRYPOINT_RELAY_ABI } from './abi.js';
+import { ENTRYPOINT_ABI } from './abi.js';
 import { generateWithdrawalProof, type FormattedProof } from './proofs.js';
 import { deriveDepositSecrets, deriveWithdrawalSecrets } from './keys.js';
 
@@ -24,10 +29,10 @@ import { deriveDepositSecrets, deriveWithdrawalSecrets } from './keys.js';
  * @param relayFeeBPS - Relay fee in basis points (0 for no fee)
  */
 export function encodeRelayData(
-  recipient: `0x${string}`,
-  feeRecipient: `0x${string}` = '0x0000000000000000000000000000000000000000',
+  recipient: Address,
+  feeRecipient: Address = '0x0000000000000000000000000000000000000000',
   relayFeeBPS: bigint = 0n
-): `0x${string}` {
+): Hex {
   return encodeAbiParameters(
     [
       { name: 'recipient', type: 'address' },
@@ -66,15 +71,15 @@ export async function buildRelayedWithdrawalCalldata(
     /** ASP-approved labels. */
     aspLeaves: bigint[];
     /** Entrypoint contract address (becomes the processooor). */
-    entrypointAddress: `0x${string}`;
+    entrypointAddress: Address;
     /** Final recipient address (encoded in RelayData). */
-    recipientAddress: `0x${string}`;
+    recipientAddress: Address;
     /** Optional relay fee recipient. Defaults to zero address (no fee). */
-    feeRecipient?: `0x${string}`;
+    feeRecipient?: Address;
     /** Optional relay fee in basis points. Defaults to 0. */
     relayFeeBPS?: bigint;
   }
-): Promise<`0x${string}`> {
+): Promise<Hex> {
   // Derive the correct secrets based on whether this is an original
   // deposit or a change commitment from a prior partial withdrawal.
   const secrets =
@@ -113,7 +118,7 @@ export async function buildRelayedWithdrawalCalldata(
 
   // Encode Entrypoint.relay() calldata
   return encodeFunctionData({
-    abi: ENTRYPOINT_RELAY_ABI,
+    abi: ENTRYPOINT_ABI,
     functionName: 'relay',
     args: [
       {

@@ -1,14 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { decodeAbiParameters, decodeFunctionData } from 'viem';
+import { type Address, decodeAbiParameters, decodeFunctionData } from 'viem';
 import { encodeRelayData } from '../src/relay';
-import { ENTRYPOINT_RELAY_ABI } from '../src/abi';
+import { ENTRYPOINT_ABI } from '../src/abi';
 
 describe('encodeRelayData', () => {
   it('encodes recipient, feeRecipient, and relayFeeBPS', () => {
-    const recipient =
-      '0x1111111111111111111111111111111111111111' as `0x${string}`;
+    const recipient = '0x1111111111111111111111111111111111111111' as Address;
     const feeRecipient =
-      '0x2222222222222222222222222222222222222222' as `0x${string}`;
+      '0x2222222222222222222222222222222222222222' as Address;
     const feeBPS = 100n;
 
     const encoded = encodeRelayData(recipient, feeRecipient, feeBPS);
@@ -29,8 +28,7 @@ describe('encodeRelayData', () => {
   });
 
   it('defaults to zero address and zero fee', () => {
-    const recipient =
-      '0x1111111111111111111111111111111111111111' as `0x${string}`;
+    const recipient = '0x1111111111111111111111111111111111111111' as Address;
 
     const encoded = encodeRelayData(recipient);
 
@@ -59,9 +57,9 @@ describe('encodeRelayData', () => {
   });
 });
 
-describe('ENTRYPOINT_RELAY_ABI', () => {
+describe('ENTRYPOINT_ABI', () => {
   it('has a relay function with correct inputs', () => {
-    const relayFn = ENTRYPOINT_RELAY_ABI.find(
+    const relayFn = ENTRYPOINT_ABI.find(
       (item) => item.type === 'function' && item.name === 'relay'
     );
 
