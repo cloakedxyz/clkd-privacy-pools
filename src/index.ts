@@ -55,10 +55,7 @@ export {
 export { ENTRYPOINT_ABI, ENTRYPOINT_RELAY_ABI, POOL_ABI } from './abi.js';
 
 // Relayed withdrawal helpers
-export {
-  encodeRelayData,
-  buildRelayedWithdrawalCalldata,
-} from './relay.js';
+export { encodeRelayData, buildRelayedWithdrawalCalldata } from './relay.js';
 
 // Chain configuration
 export {
