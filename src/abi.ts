@@ -37,6 +37,33 @@ export const ENTRYPOINT_ABI = [
     ],
     stateMutability: 'view',
   },
+  {
+    type: 'function',
+    name: 'relay',
+    inputs: [
+      {
+        name: '_withdrawal',
+        type: 'tuple',
+        components: [
+          { name: 'processooor', type: 'address' },
+          { name: 'data', type: 'bytes' },
+        ],
+      },
+      {
+        name: '_proof',
+        type: 'tuple',
+        components: [
+          { name: 'pA', type: 'uint256[2]' },
+          { name: 'pB', type: 'uint256[2][2]' },
+          { name: 'pC', type: 'uint256[2]' },
+          { name: 'pubSignals', type: 'uint256[8]' },
+        ],
+      },
+      { name: '_scope', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
 ] as const;
 
 export const POOL_ABI = [

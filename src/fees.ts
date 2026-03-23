@@ -5,11 +5,11 @@
  * To get an exact pool value, the user must send amount + fee.
  */
 
-import type { PublicClient } from 'viem';
+import type { Address, PublicClient } from 'viem';
 import { ENTRYPOINT_ABI } from './abi.js';
 
 export interface AssetFeeConfig {
-  poolAddress: `0x${string}`;
+  poolAddress: Address;
   minimumDepositAmount: bigint;
   vettingFeeBPS: bigint;
   maxRelayFeeBPS: bigint;
@@ -20,8 +20,8 @@ export interface AssetFeeConfig {
  */
 export async function getAssetFeeConfig(
   client: PublicClient,
-  entrypointAddress: `0x${string}`,
-  assetAddress: `0x${string}`
+  entrypointAddress: Address,
+  assetAddress: Address
 ): Promise<AssetFeeConfig> {
   const [pool, minimumDepositAmount, vettingFeeBPS, maxRelayFeeBPS] =
     (await client.readContract({
@@ -32,7 +32,7 @@ export async function getAssetFeeConfig(
     })) as [string, bigint, bigint, bigint];
 
   return {
-    poolAddress: pool as `0x${string}`,
+    poolAddress: pool as Address,
     minimumDepositAmount,
     vettingFeeBPS,
     maxRelayFeeBPS,

@@ -13,6 +13,7 @@ import {
   bigintToHash,
 } from '@0xbow/privacy-pools-core-sdk';
 import type { MasterKeys } from '@0xbow/privacy-pools-core-sdk';
+import type { Address, Hex } from 'viem';
 import { deriveWithdrawalSecrets, buildCommitment } from './keys.js';
 
 export interface FormattedProof {
@@ -84,6 +85,10 @@ export async function generateCommitmentProof(
 /**
  * Generate a full withdrawal proof.
  * Requires Merkle proofs for both the state tree and ASP tree.
+ *
+ * @param params.data - Optional withdrawal data (hex). For direct withdrawals
+ *   this is '0x' (the default). For relayed withdrawals via Entrypoint.relay(),
+ *   this must be the ABI-encoded RelayData struct so the context hash matches.
  */
 export async function generateWithdrawalProof(
   sdk: PrivacyPoolSDK,
@@ -96,7 +101,10 @@ export async function generateWithdrawalProof(
     scope: bigint;
     stateLeaves: bigint[];
     aspLeaves: bigint[];
-    recipient: `0x${string}`;
+    recipient: Address;
+    /** Withdrawal data field. Defaults to '0x' for direct withdrawals.
+     *  For relayed withdrawals, pass the ABI-encoded RelayData. */
+    data?: Hex;
   }
 ): Promise<{ proof: FormattedProof; raw: any }> {
   const commitment = buildCommitment(
@@ -118,7 +126,7 @@ export async function generateWithdrawalProof(
   const scopeHash = bigintToHash(params.scope);
   const withdrawal = {
     processooor: params.recipient,
-    data: '0x' as `0x${string}`,
+    data: params.data ?? ('0x' as Hex),
   };
   const context = calculateContext(withdrawal, scopeHash);
 

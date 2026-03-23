@@ -54,6 +54,9 @@ export {
 // Contract ABIs
 export { ENTRYPOINT_ABI, POOL_ABI } from './abi.js';
 
+// Relayed withdrawal helpers
+export { encodeRelayData, buildRelayedWithdrawalCalldata } from './relay.js';
+
 // Chain configuration
 export {
   CHAIN_CONFIGS,
