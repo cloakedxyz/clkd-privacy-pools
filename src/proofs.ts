@@ -107,10 +107,9 @@ export async function generateWithdrawalProof(
      *  If less than value, the remainder stays in the pool as a change commitment.
      *  Defaults to value (full withdrawal). */
     withdrawalAmount?: bigint;
-    /** Index for deriving the new change commitment's withdrawal secrets.
-     *  Pass the current commitment's withdrawalIndex — the server stores
-     *  change commitments at `original.withdrawalIndex + 1`, and spending
-     *  derives secrets with `withdrawalIndex - 1`, keeping everything aligned. */
+    /** Index passed to `deriveWithdrawalSecrets` for the new change commitment.
+     *  Must equal the withdrawalIndex of the commitment being spent — the
+     *  change commitment will later be spent by deriving with this same index. */
     newWithdrawalIndex: bigint;
     /** Withdrawal data field. Defaults to '0x' for direct withdrawals.
      *  For relayed withdrawals, pass the ABI-encoded RelayData. */
