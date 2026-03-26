@@ -107,6 +107,10 @@ export async function generateWithdrawalProof(
      *  If less than value, the remainder stays in the pool as a change commitment.
      *  Defaults to value (full withdrawal). */
     withdrawalAmount?: bigint;
+    /** Index passed to `deriveWithdrawalSecrets` for the new change commitment.
+     *  Must equal the withdrawalIndex of the commitment being spent — the
+     *  change commitment will later be spent by deriving with this same index. */
+    newWithdrawalIndex: bigint;
     /** Withdrawal data field. Defaults to '0x' for direct withdrawals.
      *  For relayed withdrawals, pass the ABI-encoded RelayData. */
     data?: Hex;
@@ -126,7 +130,11 @@ export async function generateWithdrawalProof(
   const aspMerkleProof = generateMerkleProof(params.aspLeaves, params.label);
 
   const { nullifier: newNullifier, secret: newSecret } =
-    deriveWithdrawalSecrets(params.masterKeys, params.label, 0n);
+    deriveWithdrawalSecrets(
+      params.masterKeys,
+      params.label,
+      params.newWithdrawalIndex
+    );
 
   const scopeHash = bigintToHash(params.scope);
   const withdrawal = {

@@ -326,4 +326,96 @@ describe('deriveWithdrawalSecrets', () => {
 
     expect(a.nullifier).not.toBe(b.nullifier);
   });
+
+  it('different indices produce different withdrawal secrets', async () => {
+    const sig = await getTestSignature();
+    const mnemonic = await deriveMnemonic({ signature: sig });
+    const keys = deriveMasterKeys(mnemonic);
+
+    const a = deriveWithdrawalSecrets(keys, 99999n, 0n);
+    const b = deriveWithdrawalSecrets(keys, 99999n, 1n);
+
+    expect(a.nullifier).not.toBe(b.nullifier);
+    expect(a.secret).not.toBe(b.secret);
+  });
+
+  it('change commitment round-trip: secrets at index N build a commitment spendable with index N', async () => {
+    const sig = await getTestSignature();
+    const mnemonic = await deriveMnemonic({ signature: sig });
+    const keys = deriveMasterKeys(mnemonic);
+    const label = 99999n;
+    const value = 50000000000000000n;
+
+    // Simulate: original deposit (withdrawalIndex=0) creates a change
+    // commitment with newWithdrawalIndex=0, server stores withdrawalIndex=1.
+    const creationSecrets = deriveWithdrawalSecrets(keys, label, 0n);
+    const createdCommitment = buildCommitment(
+      value,
+      label,
+      creationSecrets.nullifier as any,
+      creationSecrets.secret as any
+    );
+
+    // Spending that change commitment (withdrawalIndex=1): derive with 1-1=0
+    const spendingSecrets = deriveWithdrawalSecrets(keys, label, BigInt(1 - 1));
+    const spendingCommitment = buildCommitment(
+      value,
+      label,
+      spendingSecrets.nullifier as any,
+      spendingSecrets.secret as any
+    );
+
+    expect(spendingCommitment.hash).toBe(createdCommitment.hash);
+  });
+
+  it('chained partial withdrawals: each level derives consistent secrets', async () => {
+    const sig = await getTestSignature();
+    const mnemonic = await deriveMnemonic({ signature: sig });
+    const keys = deriveMasterKeys(mnemonic);
+    const label = 99999n;
+    const value = 10000000000000000n;
+
+    // Level 0→1: spending original (wI=0), new change created with index 0
+    const change1Secrets = deriveWithdrawalSecrets(keys, label, 0n);
+    const change1Hash = buildCommitment(
+      value,
+      label,
+      change1Secrets.nullifier as any,
+      change1Secrets.secret as any
+    ).hash;
+
+    // Spending change1 (wI=1): derive with 1-1=0 → matches creation
+    const spend1Secrets = deriveWithdrawalSecrets(keys, label, BigInt(1 - 1));
+    expect(
+      buildCommitment(
+        value,
+        label,
+        spend1Secrets.nullifier as any,
+        spend1Secrets.secret as any
+      ).hash
+    ).toBe(change1Hash);
+
+    // Level 1→2: spending change1 (wI=1), new change created with index 1
+    const change2Secrets = deriveWithdrawalSecrets(keys, label, 1n);
+    const change2Hash = buildCommitment(
+      value,
+      label,
+      change2Secrets.nullifier as any,
+      change2Secrets.secret as any
+    ).hash;
+
+    // Spending change2 (wI=2): derive with 2-1=1 → matches creation
+    const spend2Secrets = deriveWithdrawalSecrets(keys, label, BigInt(2 - 1));
+    expect(
+      buildCommitment(
+        value,
+        label,
+        spend2Secrets.nullifier as any,
+        spend2Secrets.secret as any
+      ).hash
+    ).toBe(change2Hash);
+
+    // Sanity: the two change commitments have different hashes (different secrets)
+    expect(change1Hash).not.toBe(change2Hash);
+  });
 });
