@@ -87,6 +87,8 @@ export async function buildRelayedWithdrawalCalldata(
 ): Promise<Hex> {
   // Derive the correct secrets based on whether this is an original
   // deposit or a change commitment from a prior partial withdrawal.
+  // Change commitments are created with newWithdrawalIndex = parent's
+  // withdrawalIndex, so spending them requires withdrawalIndex - 1.
   const secrets =
     params.withdrawalIndex === 0
       ? deriveDepositSecrets(
@@ -97,7 +99,7 @@ export async function buildRelayedWithdrawalCalldata(
       : deriveWithdrawalSecrets(
           params.masterKeys,
           params.label,
-          BigInt(params.withdrawalIndex)
+          BigInt(params.withdrawalIndex - 1)
         );
 
   // Encode the relay data for the withdrawal struct's data field
@@ -119,6 +121,7 @@ export async function buildRelayedWithdrawalCalldata(
     aspLeaves: params.aspLeaves,
     recipient: params.entrypointAddress,
     withdrawalAmount: params.withdrawalAmount,
+    newWithdrawalIndex: BigInt(params.withdrawalIndex),
     data: relayData,
   });
 
