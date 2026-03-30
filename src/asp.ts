@@ -33,32 +33,74 @@ export interface DepositEvent {
   reviewStatus: ReviewStatus;
 }
 
+export interface GetDepositStatusesOptions {
+  /** ASP API base URL (e.g., https://api.0xbow.io) */
+  aspApiBase: string;
+  /** Chain ID */
+  chainId: number;
+  /** Precommitment hash strings (decimal) to look for */
+  precommitments: Set<string>;
+  /** Status to filter by */
+  status: ReviewStatus;
+  /**
+   * Pool scope (decimal bigint string). When provided, queries the per-pool
+   * endpoint (`/{chainId}/public/events` with `X-Pool-Scope` header) instead
+   * of the global feed. This is much faster on chains with many pools.
+   */
+  scope?: string;
+  /** Results per API page. Default: 500. Use smaller values (e.g. 50) for
+   *  background polling where you expect few results. */
+  perPage?: number;
+  /** Maximum pages to fetch. Default: unlimited (paginate until all targets
+   *  found or results exhausted). Set a cap for background polling to bound
+   *  latency. */
+  maxPages?: number;
+}
+
 /**
  * Batch-check deposit statuses via the ASP events API.
  *
  * Uses the `status` query filter so each request only returns events with
  * that status (much smaller result set than unfiltered). Paginates until
- * all targets are found or pages are exhausted — no fixed page cap.
+ * all targets are found, pages are exhausted, or `maxPages` is reached.
  *
- * @param aspApiBase - ASP API base URL (e.g., https://dw.0xbow.io)
- * @param chainId - Chain ID
- * @param precommitments - Set of precommitment hash strings (decimal) to look for
- * @param status - Status to filter by ('approved' or 'declined')
+ * Supports two query modes:
+ * - **Per-pool** (recommended): pass `scope` to query only deposits for a
+ *   specific pool via the `X-Pool-Scope` header.
+ * - **Global**: omit `scope` to scan the global feed across all pools.
+ *
  * @returns Set of precommitment hash strings that matched the given status
  */
 export async function getDepositStatuses(
-  aspApiBase: string,
-  chainId: number,
-  precommitments: Set<string>,
-  status: 'approved' | 'declined'
+  options: GetDepositStatusesOptions
 ): Promise<Set<string>> {
+  const {
+    aspApiBase,
+    chainId,
+    precommitments,
+    status,
+    scope,
+    perPage = 500,
+    maxPages,
+  } = options;
+
   const matched = new Set<string>();
+  if (precommitments.size === 0) return matched;
   const remaining = new Set(precommitments);
 
   for (let page = 1; ; page++) {
-    const res = await fetch(
-      `${aspApiBase}/global/public/events?chainId=${chainId}&action=deposit&status=${status}&perPage=50&page=${page}`
-    );
+    if (maxPages && page > maxPages) break;
+
+    const url = scope
+      ? `${aspApiBase}/${chainId}/public/events?action=deposit&status=${status}&perPage=${perPage}&page=${page}`
+      : `${aspApiBase}/global/public/events?chainId=${chainId}&action=deposit&status=${status}&perPage=${perPage}&page=${page}`;
+
+    const headers: Record<string, string> = {};
+    if (scope) {
+      headers['X-Pool-Scope'] = scope;
+    }
+
+    const res = await fetch(url, { headers });
     if (!res.ok) break;
 
     const data = (await res.json()) as {
@@ -74,7 +116,7 @@ export async function getDepositStatuses(
     }
 
     if (remaining.size === 0) break;
-    if (page * 50 >= data.total) break;
+    if (page * perPage >= data.total) break;
   }
 
   return matched;
