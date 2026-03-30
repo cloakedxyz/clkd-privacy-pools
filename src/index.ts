@@ -39,6 +39,7 @@ export {
   type AspRoots,
   type AspLeaves,
   type DepositEvent,
+  type GetDepositStatusesOptions,
 } from './asp.js';
 
 // Fee calculations
