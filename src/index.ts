@@ -31,7 +31,7 @@ export {
 
 // ASP API
 export {
-  getDepositStatus,
+  getDepositStatuses,
   getAspRoots,
   getAspLeaves,
   getRelayerDetails,
