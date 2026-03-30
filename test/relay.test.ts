@@ -58,6 +58,15 @@ describe('encodeRelayData', () => {
     // 3 ABI params × 32 bytes = 96 bytes = 192 hex chars + 0x prefix
     expect(encoded.length).toBe(2 + 192);
   });
+
+  it('rejects zero-address feeRecipient', () => {
+    const recipient = '0x1111111111111111111111111111111111111111' as Address;
+    const zeroAddress = '0x0000000000000000000000000000000000000000' as Address;
+
+    expect(() => encodeRelayData(recipient, zeroAddress)).toThrow(
+      'feeRecipient cannot be the zero address'
+    );
+  });
 });
 
 describe('ENTRYPOINT_ABI', () => {

@@ -13,7 +13,6 @@ export {
 export {
   scanPoolEvents,
   findDepositsByAddress,
-  findUserDeposits,
   getPoolState,
   type ScanResult,
   type DepositRecord,

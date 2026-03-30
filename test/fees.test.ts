@@ -36,6 +36,27 @@ describe('calculateGrossDeposit', () => {
     const net = calculateNetPoolValue(gross, 100n);
     expect(net).toBe(desired);
   });
+
+  it('handles zero desired value', () => {
+    expect(calculateGrossDeposit(0n, 100n)).toBe(0n);
+  });
+
+  it('returns minimal gross for small integer values', () => {
+    // For each case, verify the gross is the minimum value that achieves the desired net
+    for (const feeBPS of [3n, 50n, 100n, 300n, 3333n, 5000n]) {
+      for (let desired = 1n; desired <= 200n; desired++) {
+        const gross = calculateGrossDeposit(desired, feeBPS);
+        const net = calculateNetPoolValue(gross, feeBPS);
+        expect(net).toBeGreaterThanOrEqual(desired);
+
+        // gross - 1 should NOT be sufficient (proving minimality)
+        if (gross > 1n) {
+          const netBelow = calculateNetPoolValue(gross - 1n, feeBPS);
+          expect(netBelow).toBeLessThan(desired);
+        }
+      }
+    }
+  });
 });
 
 describe('calculateFeeAmount', () => {

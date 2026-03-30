@@ -55,7 +55,8 @@ export function calculateGrossDeposit(
   desiredPoolValue: bigint,
   feeBPS: bigint
 ): bigint {
-  return (desiredPoolValue * 10000n) / (10000n - feeBPS);
+  if (desiredPoolValue === 0n) return 0n;
+  return ((desiredPoolValue - 1n) * 10000n) / (10000n - feeBPS) + 1n;
 }
 
 /**
