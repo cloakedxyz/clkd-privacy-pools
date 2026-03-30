@@ -34,6 +34,9 @@ export function encodeRelayData(
   feeRecipient: Address,
   relayFeeBPS: bigint = 0n
 ): Hex {
+  if (feeRecipient === '0x0000000000000000000000000000000000000000') {
+    throw new Error('feeRecipient cannot be the zero address');
+  }
   return encodeAbiParameters(
     [
       { name: 'recipient', type: 'address' },

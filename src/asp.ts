@@ -34,40 +34,50 @@ export interface DepositEvent {
 }
 
 /**
- * Check the review status of a deposit via the ASP events API.
+ * Batch-check deposit statuses via the ASP events API.
+ *
+ * Uses the `status` query filter so each request only returns events with
+ * that status (much smaller result set than unfiltered). Paginates until
+ * all targets are found or pages are exhausted — no fixed page cap.
  *
  * @param aspApiBase - ASP API base URL (e.g., https://dw.0xbow.io)
  * @param chainId - Chain ID
- * @param precommitmentHash - The deposit's precommitment hash (decimal string)
+ * @param precommitments - Set of precommitment hash strings (decimal) to look for
+ * @param status - Status to filter by ('approved' or 'declined')
+ * @returns Set of precommitment hash strings that matched the given status
  */
-export async function getDepositStatus(
+export async function getDepositStatuses(
   aspApiBase: string,
   chainId: number,
-  precommitmentHash: bigint
-): Promise<DepositEvent | null> {
-  const precommitmentStr = precommitmentHash.toString();
-  const maxPages = 10;
+  precommitments: Set<string>,
+  status: 'approved' | 'declined'
+): Promise<Set<string>> {
+  const matched = new Set<string>();
+  const remaining = new Set(precommitments);
 
-  for (let page = 1; page <= maxPages; page++) {
+  for (let page = 1; ; page++) {
     const res = await fetch(
-      `${aspApiBase}/global/public/events?chainId=${chainId}&action=deposit&perPage=50&page=${page}`
+      `${aspApiBase}/global/public/events?chainId=${chainId}&action=deposit&status=${status}&perPage=50&page=${page}`
     );
-    if (!res.ok) return null;
+    if (!res.ok) break;
 
     const data = (await res.json()) as {
-      events: DepositEvent[];
+      events: Array<{ precommitmentHash: string }>;
       total: number;
     };
-    const match = data.events.find(
-      (e) => e.precommitmentHash === precommitmentStr
-    );
-    if (match) return match;
 
-    // Stop if we've exhausted all pages
+    for (const event of data.events) {
+      if (remaining.has(event.precommitmentHash)) {
+        matched.add(event.precommitmentHash);
+        remaining.delete(event.precommitmentHash);
+      }
+    }
+
+    if (remaining.size === 0) break;
     if (page * 50 >= data.total) break;
   }
 
-  return null;
+  return matched;
 }
 
 /**

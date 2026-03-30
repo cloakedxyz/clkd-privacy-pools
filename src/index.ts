@@ -13,7 +13,6 @@ export {
 export {
   scanPoolEvents,
   findDepositsByAddress,
-  findUserDeposits,
   getPoolState,
   type ScanResult,
   type DepositRecord,
@@ -32,7 +31,7 @@ export {
 
 // ASP API
 export {
-  getDepositStatus,
+  getDepositStatuses,
   getAspRoots,
   getAspLeaves,
   getRelayerDetails,

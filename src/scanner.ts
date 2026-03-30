@@ -165,46 +165,6 @@ export async function findDepositsByAddress(
 }
 
 /**
- * Find all deposits made by a specific wallet by iterating through
- * deposit indices and checking precommitments.
- *
- * Use findDepositsByAddress for recovery (more reliable — finds all deposits
- * regardless of index). This function is useful when you need to match
- * deposits to specific indices for proof generation.
- *
- * @param scanResult - Pre-scanned chain data
- * @param computePrecommitment - Function that computes precommitment for a given index
- * @param maxIndex - Maximum index to check (default 100)
- */
-export function findUserDeposits(
-  scanResult: ScanResult,
-  computePrecommitment: (index: bigint) => bigint,
-  maxIndex = 100
-): Array<{ index: bigint; deposit: DepositRecord }> {
-  const found: Array<{ index: bigint; deposit: DepositRecord }> = [];
-  let consecutiveMisses = 0;
-
-  for (let i = 0; i < maxIndex; i++) {
-    const idx = BigInt(i);
-    const precommitment = computePrecommitment(idx);
-    const deposit = scanResult.depositsByPrecommitment.get(precommitment);
-
-    if (deposit) {
-      found.push({ index: idx, deposit });
-      consecutiveMisses = 0;
-    } else {
-      consecutiveMisses++;
-      // Stop after 10 consecutive misses — user likely didn't deposit beyond this
-      if (consecutiveMisses >= 10 && found.length > 0) {
-        break;
-      }
-    }
-  }
-
-  return found;
-}
-
-/**
  * Read the pool's current state from on-chain.
  */
 export async function getPoolState(
