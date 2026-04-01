@@ -4,11 +4,13 @@ import {
   deriveMnemonic,
   deriveMasterKeys,
   deriveDepositSecrets,
+  deriveWithdrawalSecrets,
   computePrecommitment,
   computeNullifierHash,
+  buildCommitment,
 } from '../src/keys';
 import { discoverCommitments } from '../src/discovery';
-import type { DepositRecord } from '../src/scanner';
+import type { DepositRecord, WithdrawalRecord } from '../src/scanner';
 
 // Deterministic test key — Anvil's first default account
 const TEST_PK =
@@ -353,6 +355,254 @@ describe('discoverCommitments', () => {
       const result = discoverCommitments(keys, TEST_SCOPE, deposits, new Set());
 
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('change commitment discovery', () => {
+    /**
+     * Simulate a partial withdrawal: build the deposits map, the
+     * withdrawals map, and return everything needed for discovery.
+     */
+    async function simulatePartialWithdrawal(opts: {
+      depositValue: bigint;
+      withdrawnAmount: bigint;
+      depositIndex: number;
+    }) {
+      const keys = await getTestMasterKeys();
+      const { depositValue, withdrawnAmount, depositIndex } = opts;
+      const idx = BigInt(depositIndex);
+
+      // Build the original deposit
+      const depositSecrets = deriveDepositSecrets(keys, TEST_SCOPE, idx);
+      const precommitment = computePrecommitment(
+        depositSecrets.nullifier as bigint,
+        depositSecrets.secret as bigint
+      );
+      const depositLabel = idx * 1000n + 2n;
+      const deposits = new Map<bigint, DepositRecord>();
+      deposits.set(precommitment, {
+        commitment: idx * 1000n + 1n,
+        label: depositLabel,
+        value: depositValue,
+      });
+
+      // Compute the nullifier hash (what appears in Withdrawn event)
+      const nullifierHash = computeNullifierHash(
+        depositSecrets.nullifier as bigint
+      );
+
+      // Derive the change commitment (created by the pool contract)
+      const remainingValue = depositValue - withdrawnAmount;
+      const changeSecrets = deriveWithdrawalSecrets(keys, depositLabel, 0n);
+      const changeCommitment = buildCommitment(
+        remainingValue,
+        depositLabel,
+        changeSecrets.nullifier as bigint,
+        changeSecrets.secret as bigint
+      );
+
+      // Build the withdrawals map
+      const withdrawals = new Map<bigint, WithdrawalRecord>();
+      withdrawals.set(nullifierHash, {
+        withdrawnValue: withdrawnAmount,
+        newCommitment: changeCommitment.hash as bigint,
+      });
+
+      return {
+        keys,
+        deposits,
+        withdrawals,
+        depositLabel,
+        changeSecrets,
+        changeCommitment,
+        remainingValue,
+      };
+    }
+
+    it('discovers change commitment from partial withdrawal', async () => {
+      const { keys, deposits, withdrawals, remainingValue } =
+        await simulatePartialWithdrawal({
+          depositValue: 100n,
+          withdrawnAmount: 60n,
+          depositIndex: 0,
+        });
+
+      const result = discoverCommitments(
+        keys,
+        TEST_SCOPE,
+        deposits,
+        withdrawals,
+        { gapLimit: 0 }
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].value).toBe(remainingValue);
+      expect(result[0].withdrawalIndex).toBe(1n);
+      expect(result[0].depositIndex).toBe(0n);
+    });
+
+    it('does not discover change commitment with Set (backwards compat)', async () => {
+      const { keys, deposits, withdrawals } = await simulatePartialWithdrawal({
+        depositValue: 100n,
+        withdrawnAmount: 60n,
+        depositIndex: 0,
+      });
+
+      // Convert to Set — loses withdrawal details, no change tracing
+      const spentSet = new Set(withdrawals.keys());
+
+      const result = discoverCommitments(keys, TEST_SCOPE, deposits, spentSet, {
+        gapLimit: 0,
+      });
+
+      // Original is spent, change not discoverable without Map
+      expect(result).toHaveLength(0);
+    });
+
+    it('skips full withdrawal (no change commitment)', async () => {
+      const { keys, deposits, withdrawals } = await simulatePartialWithdrawal({
+        depositValue: 100n,
+        withdrawnAmount: 100n,
+        depositIndex: 0,
+      });
+
+      const result = discoverCommitments(
+        keys,
+        TEST_SCOPE,
+        deposits,
+        withdrawals,
+        { gapLimit: 0 }
+      );
+
+      // Full withdrawal — no change commitment
+      expect(result).toHaveLength(0);
+    });
+
+    it('discovers unspent original + change from different deposits', async () => {
+      const keys = await getTestMasterKeys();
+
+      // Deposit 0: partially withdrawn
+      const dep0Secrets = deriveDepositSecrets(keys, TEST_SCOPE, 0n);
+      const dep0Precommitment = computePrecommitment(
+        dep0Secrets.nullifier as bigint,
+        dep0Secrets.secret as bigint
+      );
+      const dep0Label = 1000n;
+      const dep0NullifierHash = computeNullifierHash(
+        dep0Secrets.nullifier as bigint
+      );
+      const change0Secrets = deriveWithdrawalSecrets(keys, dep0Label, 0n);
+      const change0 = buildCommitment(
+        40n,
+        dep0Label,
+        change0Secrets.nullifier as bigint,
+        change0Secrets.secret as bigint
+      );
+
+      // Deposit 1: unspent
+      const dep1Secrets = deriveDepositSecrets(keys, TEST_SCOPE, 1n);
+      const dep1Precommitment = computePrecommitment(
+        dep1Secrets.nullifier as bigint,
+        dep1Secrets.secret as bigint
+      );
+
+      const deposits = new Map<bigint, DepositRecord>();
+      deposits.set(dep0Precommitment, {
+        commitment: 1n,
+        label: dep0Label,
+        value: 100n,
+      });
+      deposits.set(dep1Precommitment, {
+        commitment: 2n,
+        label: 2000n,
+        value: 50n,
+      });
+
+      const withdrawals = new Map<bigint, WithdrawalRecord>();
+      withdrawals.set(dep0NullifierHash, {
+        withdrawnValue: 60n,
+        newCommitment: change0.hash as bigint,
+      });
+
+      const result = discoverCommitments(
+        keys,
+        TEST_SCOPE,
+        deposits,
+        withdrawals,
+        { gapLimit: 0 }
+      );
+
+      expect(result).toHaveLength(2);
+      // Sorted by value: 50n (original), 40n (change)
+      expect(result[0].value).toBe(50n);
+      expect(result[0].withdrawalIndex).toBe(0n);
+      expect(result[1].value).toBe(40n);
+      expect(result[1].withdrawalIndex).toBe(1n);
+    });
+
+    it('traces two-deep change commitment chain', async () => {
+      const keys = await getTestMasterKeys();
+      const depositIndex = 0n;
+      const label = 5000n;
+
+      // Original deposit: 100 wei
+      const dep = deriveDepositSecrets(keys, TEST_SCOPE, depositIndex);
+      const precommitment = computePrecommitment(
+        dep.nullifier as bigint,
+        dep.secret as bigint
+      );
+      const depNullifierHash = computeNullifierHash(dep.nullifier as bigint);
+
+      // First partial withdrawal: 30 from 100 → change of 70
+      const change0Secrets = deriveWithdrawalSecrets(keys, label, 0n);
+      const change0 = buildCommitment(
+        70n,
+        label,
+        change0Secrets.nullifier as bigint,
+        change0Secrets.secret as bigint
+      );
+      const change0NullifierHash = computeNullifierHash(
+        change0Secrets.nullifier as bigint
+      );
+
+      // Second partial withdrawal: 20 from 70 → change of 50
+      const change1Secrets = deriveWithdrawalSecrets(keys, label, 1n);
+      const change1 = buildCommitment(
+        50n,
+        label,
+        change1Secrets.nullifier as bigint,
+        change1Secrets.secret as bigint
+      );
+
+      const deposits = new Map<bigint, DepositRecord>();
+      deposits.set(precommitment, {
+        commitment: 1n,
+        label,
+        value: 100n,
+      });
+
+      const withdrawals = new Map<bigint, WithdrawalRecord>();
+      withdrawals.set(depNullifierHash, {
+        withdrawnValue: 30n,
+        newCommitment: change0.hash as bigint,
+      });
+      withdrawals.set(change0NullifierHash, {
+        withdrawnValue: 20n,
+        newCommitment: change1.hash as bigint,
+      });
+
+      const result = discoverCommitments(
+        keys,
+        TEST_SCOPE,
+        deposits,
+        withdrawals,
+        { gapLimit: 0 }
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].value).toBe(50n);
+      expect(result[0].withdrawalIndex).toBe(2n);
+      expect(result[0].depositIndex).toBe(0n);
     });
   });
 });

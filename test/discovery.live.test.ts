@@ -18,6 +18,7 @@ import { createPublicClient, http, type Address } from 'viem';
 import { sepolia } from 'viem/chains';
 import { deriveMasterKeys } from '../src/keys';
 import { scanPoolEvents } from '../src/scanner';
+import type { WithdrawalRecord } from '../src/scanner';
 import { discoverCommitments } from '../src/discovery';
 import { selectCommitments } from '../src/selection';
 import { CHAIN_CONFIGS } from '../src/config';
@@ -41,16 +42,17 @@ const WITHDRAWN_EVENT = POOL_ABI.find(
 )!;
 
 /**
- * Scan Withdrawn events to collect spent nullifier hashes.
+ * Scan Withdrawn events to collect withdrawal records keyed by nullifier hash.
+ * Returns a Map for change commitment tracing.
  */
-async function scanSpentNullifiers(
+async function scanWithdrawals(
   client: ReturnType<typeof createPublicClient>,
   poolAddress: Address,
   fromBlock: bigint,
   toBlock: bigint,
   chunkSize = 10000n
-): Promise<Set<bigint>> {
-  const spent = new Set<bigint>();
+): Promise<Map<bigint, WithdrawalRecord>> {
+  const withdrawals = new Map<bigint, WithdrawalRecord>();
 
   for (let start = fromBlock; start <= toBlock; start += chunkSize) {
     const end =
@@ -64,12 +66,19 @@ async function scanSpentNullifiers(
     });
 
     for (const e of events) {
-      const args = e.args as { _spentNullifier: bigint };
-      spent.add(args._spentNullifier);
+      const args = e.args as {
+        _spentNullifier: bigint;
+        _value: bigint;
+        _newCommitment: bigint;
+      };
+      withdrawals.set(args._spentNullifier, {
+        withdrawnValue: args._value,
+        newCommitment: args._newCommitment,
+      });
     }
   }
 
-  return spent;
+  return withdrawals;
 }
 
 describe.skipIf(!TEST_MNEMONIC)('discovery (live) — Sepolia ETH pool', () => {
@@ -105,8 +114,8 @@ describe.skipIf(!TEST_MNEMONIC)('discovery (live) — Sepolia ETH pool', () => {
     depositCount = scanResult.depositsByPrecommitment.size;
     expect(depositCount).toBeGreaterThan(0);
 
-    // Scan Withdrawn events for spent nullifiers
-    const spentNullifiers = await scanSpentNullifiers(
+    // Scan Withdrawn events (Map for change commitment tracing)
+    const withdrawals = await scanWithdrawals(
       client,
       ethPool.address,
       sepoliaConfig.startBlock,
@@ -114,39 +123,49 @@ describe.skipIf(!TEST_MNEMONIC)('discovery (live) — Sepolia ETH pool', () => {
       49000n
     );
 
-    spentCount = spentNullifiers.size;
+    spentCount = withdrawals.size;
 
-    // Discover ALL user commitments (without spent filtering)
-    const allUserCommitments = discoverCommitments(
+    // Discover ALL user deposits (without spent filtering)
+    const allUserDeposits = discoverCommitments(
       masterKeys,
       ethPool.scope,
       scanResult.depositsByPrecommitment,
-      new Set(), // empty = no filtering
+      new Set<bigint>(),
       { maxIndex: 100, gapLimit: 0 }
     );
 
-    // Discover unspent commitments only
+    // Discover unspent commitments (including change commitments)
     discovered = discoverCommitments(
       masterKeys,
       ethPool.scope,
       scanResult.depositsByPrecommitment,
-      spentNullifiers,
+      withdrawals,
       { maxIndex: 100, gapLimit: 0 }
     );
 
     availableCount = discovered.length;
     totalAvailable = discovered.reduce((sum, c) => sum + c.value, 0n);
-    const userSpent = allUserCommitments.length - availableCount;
 
-    // Should find deposits (user reported ~26 deposits, ~2 withdrawals)
+    const changeCommitments = discovered.filter((c) => c.withdrawalIndex > 0n);
+
     expect(availableCount).toBeGreaterThan(0);
 
     console.log(
       `Pool: ${depositCount} total deposits, ${spentCount} total withdrawals\n` +
-        `User: ${allUserCommitments.length} total deposits, ` +
-        `${userSpent} spent, ${availableCount} available\n` +
+        `User: ${allUserDeposits.length} original deposits, ` +
+        `${availableCount} available (${changeCommitments.length} change commitments)\n` +
         `Total available value: ${totalAvailable} wei`
     );
+
+    if (changeCommitments.length > 0) {
+      for (const c of changeCommitments) {
+        console.log(
+          `  change: depositIndex=${c.depositIndex}, ` +
+            `withdrawalIndex=${c.withdrawalIndex}, ` +
+            `value=${c.value} wei`
+        );
+      }
+    }
   }, 300_000);
 
   it('all discovered commitments have positive values', () => {
@@ -155,9 +174,9 @@ describe.skipIf(!TEST_MNEMONIC)('discovery (live) — Sepolia ETH pool', () => {
     }
   });
 
-  it('all discovered commitments have withdrawalIndex 0', () => {
+  it('all discovered commitments have valid withdrawalIndex', () => {
     for (const c of discovered) {
-      expect(c.withdrawalIndex).toBe(0n);
+      expect(c.withdrawalIndex).toBeGreaterThanOrEqual(0n);
     }
   });
 

@@ -14,6 +14,17 @@ export interface DepositRecord {
   value: bigint;
 }
 
+/**
+ * Record of a withdrawal, parsed from a Withdrawn event.
+ * Used for spent detection and change commitment tracing.
+ */
+export interface WithdrawalRecord {
+  /** Amount withdrawn from the commitment. */
+  withdrawnValue: bigint;
+  /** Hash of the new change commitment (from the Withdrawn event). */
+  newCommitment: bigint;
+}
+
 export interface ScanResult {
   /** All state tree leaves in insertion order. */
   leaves: bigint[];
