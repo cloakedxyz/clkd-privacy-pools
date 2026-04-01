@@ -54,6 +54,7 @@
   "packageManager": "pnpm@10.18.0",
   "dependencies": {
     "@0xbow/privacy-pools-core-sdk": "1.2.0",
+    "maci-crypto": "2.5.0",
     "viem": "^2.39.2"
   },
   "devDependencies": {

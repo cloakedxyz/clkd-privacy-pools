@@ -6,7 +6,9 @@ export {
   deriveWithdrawalSecrets,
   computePrecommitment,
   buildCommitment,
+  computeNullifierHash,
   bigintToHash,
+  type MasterKeys,
 } from './keys.js';
 
 // Chain scanning
@@ -56,6 +58,17 @@ export { ENTRYPOINT_ABI, POOL_ABI } from './abi.js';
 
 // Relayed withdrawal helpers
 export { encodeRelayData, buildRelayedWithdrawalCalldata } from './relay.js';
+
+// Commitment discovery
+export { discoverCommitments, type DiscoverOptions } from './discovery.js';
+
+// Commitment selection
+export {
+  selectCommitments,
+  MAX_COMMITMENTS_PER_WITHDRAWAL,
+  type WithdrawableCommitment,
+  type SelectedCommitment,
+} from './selection.js';
 
 // Chain configuration
 export {

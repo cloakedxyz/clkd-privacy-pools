@@ -11,6 +11,9 @@ importers:
       '@0xbow/privacy-pools-core-sdk':
         specifier: 1.2.0
         version: 1.2.0
+      maci-crypto:
+        specifier: 2.5.0
+        version: 2.5.0
       viem:
         specifier: ^2.39.2
         version: 2.47.6(typescript@5.9.3)
