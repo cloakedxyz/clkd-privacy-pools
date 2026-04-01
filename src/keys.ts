@@ -17,6 +17,7 @@
 
 import { keccak256, hexToBytes, encodePacked, type Hex } from 'viem';
 import { english } from 'viem/accounts';
+import { poseidon } from 'maci-crypto/build/ts/hashing.js';
 import {
   generateMasterKeys,
   generateDepositSecrets,
@@ -179,4 +180,22 @@ export function buildCommitment(
   );
 }
 
+/**
+ * Compute the nullifier hash for a deposit.
+ *
+ * This is the value emitted as `_spentNullifier` in the pool's Withdrawn
+ * event and stored in the contract's `nullifierHashes` mapping. It is
+ * computed as `poseidon([nullifier])` — a single-input Poseidon hash of
+ * the deposit's raw nullifier.
+ *
+ * Note: this is NOT the same as the precommitment hash, which is
+ * `poseidon([nullifier, secret])`. The naming in the 0xbow SDK's
+ * `commitment.nullifierHash` field is misleading — that field holds
+ * the precommitment hash, not the on-chain nullifier hash.
+ */
+export function computeNullifierHash(nullifier: bigint): bigint {
+  return BigInt(poseidon([nullifier]));
+}
+
 export { bigintToHash } from '@0xbow/privacy-pools-core-sdk';
+export type { MasterKeys } from '@0xbow/privacy-pools-core-sdk';

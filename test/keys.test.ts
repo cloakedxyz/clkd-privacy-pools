@@ -6,6 +6,7 @@ import {
   deriveDepositSecrets,
   deriveWithdrawalSecrets,
   computePrecommitment,
+  computeNullifierHash,
   buildCommitment,
 } from '../src/keys';
 
@@ -417,5 +418,58 @@ describe('deriveWithdrawalSecrets', () => {
 
     // Sanity: the two change commitments have different hashes (different secrets)
     expect(change1Hash).not.toBe(change2Hash);
+  });
+});
+
+describe('computeNullifierHash', () => {
+  it('produces a bigint', async () => {
+    const sig = await getTestSignature();
+    const mnemonic = await deriveMnemonic({ signature: sig });
+    const keys = deriveMasterKeys(mnemonic);
+    const secrets = deriveDepositSecrets(keys, 12345n, 0n);
+
+    const hash = computeNullifierHash(secrets.nullifier as bigint);
+    expect(hash).toBeTypeOf('bigint');
+    expect(hash).toBeGreaterThan(0n);
+  });
+
+  it('is deterministic', async () => {
+    const sig = await getTestSignature();
+    const mnemonic = await deriveMnemonic({ signature: sig });
+    const keys = deriveMasterKeys(mnemonic);
+    const secrets = deriveDepositSecrets(keys, 12345n, 0n);
+
+    const a = computeNullifierHash(secrets.nullifier as bigint);
+    const b = computeNullifierHash(secrets.nullifier as bigint);
+    expect(a).toBe(b);
+  });
+
+  it('different nullifiers produce different hashes', async () => {
+    const sig = await getTestSignature();
+    const mnemonic = await deriveMnemonic({ signature: sig });
+    const keys = deriveMasterKeys(mnemonic);
+
+    const s0 = deriveDepositSecrets(keys, 12345n, 0n);
+    const s1 = deriveDepositSecrets(keys, 12345n, 1n);
+
+    const h0 = computeNullifierHash(s0.nullifier as bigint);
+    const h1 = computeNullifierHash(s1.nullifier as bigint);
+    expect(h0).not.toBe(h1);
+  });
+
+  it('differs from precommitment hash', async () => {
+    const sig = await getTestSignature();
+    const mnemonic = await deriveMnemonic({ signature: sig });
+    const keys = deriveMasterKeys(mnemonic);
+    const secrets = deriveDepositSecrets(keys, 12345n, 0n);
+
+    const nullifierHash = computeNullifierHash(secrets.nullifier as bigint);
+    const precommitment = computePrecommitment(
+      secrets.nullifier as bigint,
+      secrets.secret as bigint
+    );
+
+    // These are different hashes: poseidon([nullifier]) vs poseidon([nullifier, secret])
+    expect(nullifierHash).not.toBe(precommitment);
   });
 });
