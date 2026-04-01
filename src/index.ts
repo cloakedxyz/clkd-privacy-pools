@@ -18,6 +18,7 @@ export {
   getPoolState,
   type ScanResult,
   type DepositRecord,
+  type WithdrawalRecord,
 } from './scanner.js';
 
 // Proof generation

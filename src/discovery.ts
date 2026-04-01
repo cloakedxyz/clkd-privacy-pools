@@ -6,26 +6,27 @@
  * against known deposits. Filters out spent commitments using nullifier
  * hashes.
  *
- * Key insight: the precommitment hash (poseidon(nullifier, secret)) is used
- * for deposit matching, while the nullifier hash (poseidon(nullifier)) is
- * the value emitted as `_spentNullifier` in Withdrawn events. These are
- * different values — both are derived from the same deposit secrets.
+ * When withdrawal records are provided (as a Map instead of a Set),
+ * also traces partial-withdrawal chains to discover change commitments.
  *
  * Typical usage:
  * ```ts
  * // 1. Scan chain or fetch from server
  * const scanResult = await scanPoolEvents(client, pool, from, to);
- * const spentNullifiers = await getSpentNullifiers(...); // from Withdrawn events
  *
- * // 2. Discover user's unspent commitments
+ * // 2. Build withdrawals map from Withdrawn events
+ * const withdrawals = new Map<bigint, WithdrawalRecord>();
+ * // ... populate from Withdrawn events
+ *
+ * // 3. Discover user's unspent commitments (including change commitments)
  * const masterKeys = deriveMasterKeys(mnemonic);
  * const available = discoverCommitments(
  *   masterKeys, scope,
  *   scanResult.depositsByPrecommitment,
- *   spentNullifiers,
+ *   withdrawals,
  * );
  *
- * // 3. Select for withdrawal
+ * // 4. Select for withdrawal
  * const selected = selectCommitments(available, amount);
  * ```
  */
@@ -33,10 +34,12 @@
 import type { MasterKeys } from '@0xbow/privacy-pools-core-sdk';
 import {
   deriveDepositSecrets,
+  deriveWithdrawalSecrets,
   computePrecommitment,
   computeNullifierHash,
+  buildCommitment,
 } from './keys.js';
-import type { DepositRecord } from './scanner.js';
+import type { DepositRecord, WithdrawalRecord } from './scanner.js';
 import type { WithdrawableCommitment } from './selection.js';
 
 export interface DiscoverOptions {
@@ -52,26 +55,43 @@ export interface DiscoverOptions {
    * @default 20
    */
   gapLimit?: number;
+
+  /**
+   * Maximum depth for change commitment chains.
+   * Each partial withdrawal creates a change commitment that can itself
+   * be partially withdrawn. This limits how deep the chain is followed.
+   * @default 10
+   */
+  maxChainDepth?: number;
 }
+
+/**
+ * Spent nullifiers can be provided as:
+ * - `Set<bigint>` — basic spent filtering only (no change commitment tracing)
+ * - `Map<bigint, WithdrawalRecord>` — enables change commitment discovery
+ *   by providing the withdrawn value and new commitment hash for each spent
+ *   nullifier
+ */
+export type SpentNullifiers =
+  | ReadonlySet<bigint>
+  | ReadonlyMap<bigint, WithdrawalRecord>;
 
 /**
  * Discover the user's unspent pool commitments.
  *
  * Iterates deposit indices from 0, deriving secrets and matching
  * precommitments against the provided deposit map. Commitments whose
- * nullifier hash appears in `spentNullifiers` are excluded.
- *
- * The on-chain `_spentNullifier` (from Withdrawn events) is
- * `poseidon([nullifier])` — a single-input hash of the raw nullifier,
- * NOT the precommitment hash `poseidon([nullifier, secret])`.
+ * nullifier hash appears in the spent set are excluded — unless
+ * withdrawal records are provided (Map), in which case partial
+ * withdrawals are traced to discover change commitments.
  *
  * @param masterKeys - User's master keys (from deriveMasterKeys).
  * @param scope - Pool scope (from getPoolState or chain config).
  * @param deposits - Deposits indexed by precommitment hash
  *   (e.g. from scanPoolEvents().depositsByPrecommitment).
- * @param spentNullifiers - Set of spent nullifier hashes, i.e. the
- *   `_spentNullifier` values from Withdrawn events (or a server endpoint).
- *   These are `poseidon([nullifier])` — NOT precommitment hashes.
+ * @param spentNullifiers - Either a Set of spent nullifier hashes
+ *   (basic filtering) or a Map from nullifier hash to WithdrawalRecord
+ *   (enables change commitment discovery).
  * @param options - Scanning limits.
  * @returns Unspent commitments sorted descending by value,
  *   ready for {@link selectCommitments}.
@@ -80,12 +100,14 @@ export function discoverCommitments(
   masterKeys: MasterKeys,
   scope: bigint,
   deposits: ReadonlyMap<bigint, DepositRecord>,
-  spentNullifiers: ReadonlySet<bigint>,
+  spentNullifiers: SpentNullifiers,
   options?: DiscoverOptions
 ): WithdrawableCommitment[] {
   const maxIndex = options?.maxIndex ?? 100;
   const gapLimit = options?.gapLimit ?? 20;
+  const maxChainDepth = options?.maxChainDepth ?? 10;
 
+  const isMap = spentNullifiers instanceof Map;
   const found: WithdrawableCommitment[] = [];
   let consecutiveMisses = 0;
 
@@ -108,25 +130,108 @@ export function discoverCommitments(
 
     consecutiveMisses = 0;
 
-    // The on-chain _spentNullifier is poseidon([nullifier]) — a single-input
-    // Poseidon hash of the raw nullifier. This is different from the
-    // precommitment hash which is poseidon([nullifier, secret]).
     const nullifierHash = computeNullifierHash(secrets.nullifier as bigint);
-    if (spentNullifiers.has(nullifierHash)) {
+
+    if (!spentNullifiers.has(nullifierHash)) {
+      // Unspent original deposit
+      found.push({
+        depositIndex: index,
+        withdrawalIndex: 0n,
+        commitment: deposit.commitment,
+        label: deposit.label,
+        value: deposit.value,
+      });
       continue;
     }
 
-    found.push({
-      depositIndex: index,
-      withdrawalIndex: 0n,
-      commitment: deposit.commitment,
-      label: deposit.label,
-      value: deposit.value,
-    });
+    // Spent — trace change commitment chain if withdrawal records available
+    if (isMap) {
+      traceChangeCommitments(
+        masterKeys,
+        index,
+        deposit.label,
+        deposit.value,
+        nullifierHash,
+        spentNullifiers as ReadonlyMap<bigint, WithdrawalRecord>,
+        found,
+        maxChainDepth
+      );
+    }
   }
 
-  // Sort descending by value for selectCommitments
   found.sort((a, b) => (b.value > a.value ? 1 : b.value < a.value ? -1 : 0));
 
   return found;
+}
+
+/**
+ * Trace a chain of partial withdrawals to find unspent change commitments.
+ *
+ * When a commitment is partially withdrawn, the pool contract creates a
+ * change commitment with the remaining value. This function follows the
+ * chain: original → change → change → ... until it finds an unspent
+ * commitment or the chain ends.
+ *
+ * Change commitment secrets are derived from:
+ *   `deriveWithdrawalSecrets(masterKeys, label, withdrawalIndex)`
+ * where withdrawalIndex increments for each link in the chain.
+ */
+function traceChangeCommitments(
+  masterKeys: MasterKeys,
+  depositIndex: bigint,
+  label: bigint,
+  parentValue: bigint,
+  parentNullifierHash: bigint,
+  withdrawals: ReadonlyMap<bigint, WithdrawalRecord>,
+  found: WithdrawableCommitment[],
+  maxDepth: number
+): void {
+  let currentValue = parentValue;
+  let currentNullifierHash = parentNullifierHash;
+
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const withdrawal = withdrawals.get(currentNullifierHash);
+    if (!withdrawal) break;
+
+    const remainingValue = currentValue - withdrawal.withdrawnValue;
+    if (remainingValue <= 0n) break; // Full withdrawal — no change
+
+    // The change commitment was created with withdrawalIndex = depth
+    // (first change = 0, second = 1, etc.)
+    const changeSecrets = deriveWithdrawalSecrets(
+      masterKeys,
+      label,
+      BigInt(depth)
+    );
+
+    // Verify the derived commitment matches the on-chain change commitment
+    const derived = buildCommitment(
+      remainingValue,
+      label,
+      changeSecrets.nullifier as bigint,
+      changeSecrets.secret as bigint
+    );
+    if (derived.hash !== withdrawal.newCommitment) break;
+
+    // Check if this change commitment is itself spent
+    const changeNullifierHash = computeNullifierHash(
+      changeSecrets.nullifier as bigint
+    );
+
+    if (!withdrawals.has(changeNullifierHash)) {
+      // Unspent change commitment
+      found.push({
+        depositIndex,
+        withdrawalIndex: BigInt(depth + 1),
+        commitment: withdrawal.newCommitment,
+        label,
+        value: remainingValue,
+      });
+      return;
+    }
+
+    // This change commitment was also spent — continue tracing
+    currentValue = remainingValue;
+    currentNullifierHash = changeNullifierHash;
+  }
 }
