@@ -358,6 +358,75 @@ describe('discoverCommitments', () => {
     });
   });
 
+  describe('ASP label filtering', () => {
+    it('excludes deposits not in ASP labels set', async () => {
+      const keys = await getTestMasterKeys();
+      const deposits = buildDepositsMap(keys, TEST_SCOPE, [0, 1, 2]);
+
+      // Only deposit 1's label is ASP-approved
+      const dep1Label = deposits.values().next().value!; // get any deposit
+      // Build a set with only the label from deposit index 1
+      const dep1Secrets = deriveDepositSecrets(keys, TEST_SCOPE, 1n);
+      const dep1Precommitment = computePrecommitment(
+        dep1Secrets.nullifier as bigint,
+        dep1Secrets.secret as bigint
+      );
+      const dep1Record = deposits.get(dep1Precommitment)!;
+      const aspLabels = new Set([dep1Record.label]);
+
+      const result = discoverCommitments(
+        keys,
+        TEST_SCOPE,
+        deposits,
+        new Set(),
+        {
+          gapLimit: 0,
+          aspLabels,
+        }
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].label).toBe(dep1Record.label);
+    });
+
+    it('returns all deposits when aspLabels is not provided', async () => {
+      const keys = await getTestMasterKeys();
+      const deposits = buildDepositsMap(keys, TEST_SCOPE, [0, 1, 2]);
+
+      const result = discoverCommitments(
+        keys,
+        TEST_SCOPE,
+        deposits,
+        new Set(),
+        {
+          gapLimit: 0,
+        }
+      );
+
+      expect(result).toHaveLength(3);
+    });
+
+    it('returns empty when no deposits are ASP-approved', async () => {
+      const keys = await getTestMasterKeys();
+      const deposits = buildDepositsMap(keys, TEST_SCOPE, [0, 1]);
+
+      const aspLabels = new Set([999999999n]); // no deposit has this label
+
+      const result = discoverCommitments(
+        keys,
+        TEST_SCOPE,
+        deposits,
+        new Set(),
+        {
+          gapLimit: 0,
+          aspLabels,
+        }
+      );
+
+      expect(result).toHaveLength(0);
+    });
+  });
+
   describe('change commitment discovery', () => {
     /**
      * Simulate a partial withdrawal: build the deposits map, the
