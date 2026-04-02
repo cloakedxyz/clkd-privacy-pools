@@ -63,6 +63,15 @@ export interface DiscoverOptions {
    * @default 10
    */
   maxChainDepth?: number;
+
+  /**
+   * Set of ASP-approved labels. When provided, only deposits whose label
+   * appears in this set are included. Deposits that failed or were declined
+   * by the ASP are filtered out — they can't be withdrawn (only ragequit).
+   *
+   * Pass the `aspLeaves` from the 0xbow API or from `getAspLeaves()`.
+   */
+  aspLabels?: ReadonlySet<bigint>;
 }
 
 /**
@@ -106,6 +115,7 @@ export function discoverCommitments(
   const maxIndex = options?.maxIndex ?? 100;
   const gapLimit = options?.gapLimit ?? 20;
   const maxChainDepth = options?.maxChainDepth ?? 10;
+  const aspLabels = options?.aspLabels;
 
   const isMap = spentNullifiers instanceof Map;
   const found: WithdrawableCommitment[] = [];
@@ -129,6 +139,12 @@ export function discoverCommitments(
     }
 
     consecutiveMisses = 0;
+
+    // Skip deposits not approved by the ASP (failed/declined/pending).
+    // These can only be recovered via ragequit, not withdrawn normally.
+    if (aspLabels && !aspLabels.has(deposit.label)) {
+      continue;
+    }
 
     const nullifierHash = computeNullifierHash(secrets.nullifier as bigint);
 

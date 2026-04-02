@@ -23,6 +23,7 @@ import { discoverCommitments } from '../src/discovery';
 import { selectCommitments } from '../src/selection';
 import { CHAIN_CONFIGS } from '../src/config';
 import { POOL_ABI } from '../src/abi';
+import { getAspLeaves } from '../src/asp';
 
 // Load .env if the env var isn't already set
 function loadMnemonic(): string | undefined {
@@ -125,7 +126,15 @@ describe.skipIf(!TEST_MNEMONIC)('discovery (live) — Sepolia ETH pool', () => {
 
     spentCount = withdrawals.size;
 
-    // Discover ALL user deposits (without spent filtering)
+    // Fetch ASP-approved labels
+    const aspResponse = await getAspLeaves(
+      sepoliaConfig.aspApiBase,
+      sepoliaConfig.chainId,
+      ethPool.scope
+    );
+    const aspLabels = new Set(aspResponse.aspLeaves.map(BigInt));
+
+    // Discover ALL user deposits (without any filtering)
     const allUserDeposits = discoverCommitments(
       masterKeys,
       ethPool.scope,
@@ -134,13 +143,13 @@ describe.skipIf(!TEST_MNEMONIC)('discovery (live) — Sepolia ETH pool', () => {
       { maxIndex: 100, gapLimit: 0 }
     );
 
-    // Discover unspent commitments (including change commitments)
+    // Discover withdrawable commitments (ASP-approved, unspent, including change)
     discovered = discoverCommitments(
       masterKeys,
       ethPool.scope,
       scanResult.depositsByPrecommitment,
       withdrawals,
-      { maxIndex: 100, gapLimit: 0 }
+      { maxIndex: 100, gapLimit: 0, aspLabels }
     );
 
     availableCount = discovered.length;
