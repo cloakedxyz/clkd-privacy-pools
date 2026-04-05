@@ -181,6 +181,77 @@ export function discoverCommitments(
 }
 
 /**
+ * Discover unspent change commitments for server-provided commitments.
+ *
+ * When the server provides the user's known commitments directly (no need
+ * for index-scanning discovery), this function handles the one thing the
+ * server can't know about blind withdrawals: change commitments from
+ * partial withdrawals.
+ *
+ * For each provided commitment, computes its nullifier hash. If the
+ * nullifier is spent (appears in the spentNullifiers map), traces the
+ * change commitment chain to find unspent change commitments.
+ *
+ * Returns only the discovered change commitments — the caller should
+ * combine these with the unspent originals from the server.
+ *
+ * @param masterKeys - User's master keys (from deriveMasterKeys).
+ * @param scope - Pool scope (from getPoolState or chain config).
+ * @param commitments - Server-provided commitments for this account.
+ * @param spentNullifiers - Map from nullifier hash to WithdrawalRecord
+ *   (from on-chain Withdrawn events). Must be a Map (not Set) to enable
+ *   change commitment tracing.
+ * @param options - Chain depth limit.
+ * @returns Unspent change commitments sorted descending by value.
+ */
+export function discoverChangeCommitments(
+  masterKeys: MasterKeys,
+  scope: bigint,
+  commitments: ReadonlyArray<{
+    depositIndex: bigint;
+    withdrawalIndex: bigint;
+    label: bigint;
+    value: bigint;
+  }>,
+  spentNullifiers: ReadonlyMap<bigint, WithdrawalRecord>,
+  options?: { maxChainDepth?: number }
+): WithdrawableCommitment[] {
+  const maxChainDepth = options?.maxChainDepth ?? 10;
+  const found: WithdrawableCommitment[] = [];
+
+  for (const c of commitments) {
+    // Only trace from original deposits (withdrawalIndex=0).
+    // traceChangeCommitments walks the full chain from the original,
+    // so change commitments provided by the server are already covered
+    // by tracing from their original deposit.
+    if (c.withdrawalIndex !== 0n) continue;
+
+    const secrets = deriveDepositSecrets(masterKeys, scope, c.depositIndex);
+    const nullifierHash = computeNullifierHash(secrets.nullifier as bigint);
+
+    if (!spentNullifiers.has(nullifierHash)) {
+      // Not spent — no change commitment to trace
+      continue;
+    }
+
+    // Spent — trace the change commitment chain
+    traceChangeCommitments(
+      masterKeys,
+      c.depositIndex,
+      c.label,
+      c.value,
+      nullifierHash,
+      spentNullifiers,
+      found,
+      maxChainDepth
+    );
+  }
+
+  found.sort((a, b) => (b.value > a.value ? 1 : b.value < a.value ? -1 : 0));
+  return found;
+}
+
+/**
  * Trace a chain of partial withdrawals to find unspent change commitments.
  *
  * When a commitment is partially withdrawn, the pool contract creates a
