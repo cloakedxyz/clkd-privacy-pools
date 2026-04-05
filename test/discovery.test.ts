@@ -9,7 +9,10 @@ import {
   computeNullifierHash,
   buildCommitment,
 } from '../src/keys';
-import { discoverCommitments } from '../src/discovery';
+import {
+  discoverCommitments,
+  discoverChangeCommitments,
+} from '../src/discovery';
 import type { DepositRecord, WithdrawalRecord } from '../src/scanner';
 
 // Deterministic test key — Anvil's first default account
@@ -673,5 +676,189 @@ describe('discoverCommitments', () => {
       expect(result[0].withdrawalIndex).toBe(2n);
       expect(result[0].depositIndex).toBe(0n);
     });
+  });
+});
+
+describe('discoverChangeCommitments', () => {
+  it('returns empty when no commitments are spent', async () => {
+    const keys = await getTestMasterKeys();
+
+    const result = discoverChangeCommitments(
+      keys,
+      TEST_SCOPE,
+      [{ depositIndex: 0n, withdrawalIndex: 0n, label: 1000n, value: 100n }],
+      new Map()
+    );
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('discovers change commitment from partial withdrawal', async () => {
+    const keys = await getTestMasterKeys();
+    const label = 1000n;
+
+    // Compute nullifier for deposit index 0
+    const secrets = deriveDepositSecrets(keys, TEST_SCOPE, 0n);
+    const nullifierHash = computeNullifierHash(secrets.nullifier as bigint);
+
+    // Build the change commitment (what the pool contract created)
+    const changeSecrets = deriveWithdrawalSecrets(keys, label, 0n);
+    const change = buildCommitment(
+      40n,
+      label,
+      changeSecrets.nullifier as bigint,
+      changeSecrets.secret as bigint
+    );
+
+    const withdrawals = new Map<bigint, WithdrawalRecord>();
+    withdrawals.set(nullifierHash, {
+      withdrawnValue: 60n,
+      newCommitment: change.hash as bigint,
+    });
+
+    const result = discoverChangeCommitments(
+      keys,
+      TEST_SCOPE,
+      [{ depositIndex: 0n, withdrawalIndex: 0n, label, value: 100n }],
+      withdrawals
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].value).toBe(40n);
+    expect(result[0].withdrawalIndex).toBe(1n);
+    expect(result[0].depositIndex).toBe(0n);
+  });
+
+  it('skips change commitments (withdrawalIndex > 0) — traced from original', async () => {
+    const keys = await getTestMasterKeys();
+    const label = 1000n;
+
+    // Simulate: original (WI=0) spent → change (WI=1) also spent → change (WI=2) unspent
+    const dep = deriveDepositSecrets(keys, TEST_SCOPE, 0n);
+    const depNullifierHash = computeNullifierHash(dep.nullifier as bigint);
+
+    const change0Secrets = deriveWithdrawalSecrets(keys, label, 0n);
+    const change0 = buildCommitment(
+      70n,
+      label,
+      change0Secrets.nullifier as bigint,
+      change0Secrets.secret as bigint
+    );
+    const change0NullifierHash = computeNullifierHash(
+      change0Secrets.nullifier as bigint
+    );
+
+    const change1Secrets = deriveWithdrawalSecrets(keys, label, 1n);
+    const change1 = buildCommitment(
+      50n,
+      label,
+      change1Secrets.nullifier as bigint,
+      change1Secrets.secret as bigint
+    );
+
+    const withdrawals = new Map<bigint, WithdrawalRecord>();
+    withdrawals.set(depNullifierHash, {
+      withdrawnValue: 30n,
+      newCommitment: change0.hash as bigint,
+    });
+    withdrawals.set(change0NullifierHash, {
+      withdrawnValue: 20n,
+      newCommitment: change1.hash as bigint,
+    });
+
+    // Provide both the original AND the server-known change commitment
+    const commitments = [
+      { depositIndex: 0n, withdrawalIndex: 0n, label, value: 100n },
+      { depositIndex: 0n, withdrawalIndex: 1n, label, value: 70n },
+    ];
+
+    const result = discoverChangeCommitments(
+      keys,
+      TEST_SCOPE,
+      commitments,
+      withdrawals
+    );
+
+    // Should find WI=2 by tracing from WI=0, skip WI=1
+    expect(result).toHaveLength(1);
+    expect(result[0].value).toBe(50n);
+    expect(result[0].withdrawalIndex).toBe(2n);
+  });
+
+  it('skips full withdrawal (no change commitment)', async () => {
+    const keys = await getTestMasterKeys();
+    const label = 1000n;
+
+    const secrets = deriveDepositSecrets(keys, TEST_SCOPE, 0n);
+    const nullifierHash = computeNullifierHash(secrets.nullifier as bigint);
+
+    // Full withdrawal — withdrawn entire value, newCommitment is a zero-value commitment
+    const changeSecrets = deriveWithdrawalSecrets(keys, label, 0n);
+    const change = buildCommitment(
+      0n,
+      label,
+      changeSecrets.nullifier as bigint,
+      changeSecrets.secret as bigint
+    );
+
+    const withdrawals = new Map<bigint, WithdrawalRecord>();
+    withdrawals.set(nullifierHash, {
+      withdrawnValue: 100n,
+      newCommitment: change.hash as bigint,
+    });
+
+    const result = discoverChangeCommitments(
+      keys,
+      TEST_SCOPE,
+      [{ depositIndex: 0n, withdrawalIndex: 0n, label, value: 100n }],
+      withdrawals
+    );
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('handles multiple deposits with mixed spent/unspent', async () => {
+    const keys = await getTestMasterKeys();
+
+    // Deposit 0: spent (partial withdrawal)
+    const dep0Label = 1000n;
+    const dep0 = deriveDepositSecrets(keys, TEST_SCOPE, 0n);
+    const dep0Nullifier = computeNullifierHash(dep0.nullifier as bigint);
+    const change0Secrets = deriveWithdrawalSecrets(keys, dep0Label, 0n);
+    const change0 = buildCommitment(
+      40n,
+      dep0Label,
+      change0Secrets.nullifier as bigint,
+      change0Secrets.secret as bigint
+    );
+
+    // Deposit 1: not spent
+    const dep1Label = 2000n;
+
+    const withdrawals = new Map<bigint, WithdrawalRecord>();
+    withdrawals.set(dep0Nullifier, {
+      withdrawnValue: 60n,
+      newCommitment: change0.hash as bigint,
+    });
+
+    const result = discoverChangeCommitments(
+      keys,
+      TEST_SCOPE,
+      [
+        {
+          depositIndex: 0n,
+          withdrawalIndex: 0n,
+          label: dep0Label,
+          value: 100n,
+        },
+        { depositIndex: 1n, withdrawalIndex: 0n, label: dep1Label, value: 50n },
+      ],
+      withdrawals
+    );
+
+    // Only deposit 0's change commitment discovered
+    expect(result).toHaveLength(1);
+    expect(result[0].value).toBe(40n);
+    expect(result[0].depositIndex).toBe(0n);
   });
 });

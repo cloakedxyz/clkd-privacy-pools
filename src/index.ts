@@ -61,7 +61,11 @@ export { ENTRYPOINT_ABI, POOL_ABI } from './abi.js';
 export { encodeRelayData, buildRelayedWithdrawalCalldata } from './relay.js';
 
 // Commitment discovery
-export { discoverCommitments, type DiscoverOptions } from './discovery.js';
+export {
+  discoverCommitments,
+  discoverChangeCommitments,
+  type DiscoverOptions,
+} from './discovery.js';
 
 // Commitment selection
 export {
