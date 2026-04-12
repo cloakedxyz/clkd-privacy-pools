@@ -33,6 +33,8 @@ export interface WithdrawableCommitment {
   label: bigint;
   /** Commitment value in wei. */
   value: bigint;
+  /** Nullifier hash — poseidon([nullifier]). Matches `_spentNullifier` in the pool's Withdrawn event. */
+  nullifierHash: bigint;
 }
 
 /**

@@ -156,6 +156,7 @@ export function discoverCommitments(
         commitment: deposit.commitment,
         label: deposit.label,
         value: deposit.value,
+        nullifierHash,
       });
       continue;
     }
@@ -242,6 +243,7 @@ function traceChangeCommitments(
         commitment: withdrawal.newCommitment,
         label,
         value: remainingValue,
+        nullifierHash: changeNullifierHash,
       });
       return;
     }
