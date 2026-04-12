@@ -20,6 +20,7 @@ function commitment(
     commitment: BigInt(depositIndex) * 1000n + BigInt(withdrawalIndex),
     label: 99999n,
     value,
+    nullifierHash: BigInt(depositIndex) * 10000n + BigInt(withdrawalIndex),
   };
 }
 
@@ -290,6 +291,7 @@ describe('selectCommitments', () => {
         commitment: 123456789n,
         label: 987654321n,
         value: 100n,
+        nullifierHash: 111n,
       };
       const result = selectCommitments([c], 100n);
       expect(result[0].commitment).toBe(123456789n);
