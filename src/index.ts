@@ -15,6 +15,7 @@ export {
 export {
   scanPoolEvents,
   findDepositsByAddress,
+  scanPoolWithdrawals,
   getPoolState,
   type ScanResult,
   type DepositRecord,
