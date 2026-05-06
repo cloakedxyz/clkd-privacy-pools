@@ -84,6 +84,16 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
           '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
         ),
       },
+      USDT: {
+        address: '0xe859c0bd25f260baee534fb52e307d3b64d24572',
+        type: 'complex',
+        assetAddress: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+        scope: computeScope(
+          '0xe859c0bd25f260baee534fb52e307d3b64d24572',
+          1,
+          '0xdac17f958d2ee523a2206206994597c13d831ec7'
+        ),
+      },
     },
   },
 

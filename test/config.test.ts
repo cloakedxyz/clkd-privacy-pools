@@ -10,7 +10,27 @@ describe('getChainConfig', () => {
     );
     expect(config.pools['ETH']).toBeDefined();
     expect(config.pools['ETH']!.type).toBe('simple');
+    expect(config.pools['USDC']).toBeDefined();
+    expect(config.pools['USDT']).toBeDefined();
     expect(config.aspApiBase).toBe('https://api.0xbow.io');
+  });
+
+  it('includes mainnet USDT pool config', () => {
+    const config = getChainConfig(1);
+    const pool = config.pools['USDT'];
+
+    expect(pool).toMatchObject({
+      address: '0xe859c0bd25f260baee534fb52e307d3b64d24572',
+      type: 'complex',
+      assetAddress: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+    });
+    expect(pool!.scope).toBe(
+      computeScope(
+        '0xe859c0bd25f260baee534fb52e307d3b64d24572',
+        1,
+        '0xdac17f958d2ee523a2206206994597c13d831ec7'
+      )
+    );
   });
 
   it('returns sepolia config', () => {
