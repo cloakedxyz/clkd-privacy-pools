@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Address, PublicClient } from 'viem';
-import { scanPoolEvents, scanPoolWithdrawals } from '../src/scanner';
+import {
+  scanPoolEvents,
+  scanPoolRagequits,
+  scanPoolWithdrawals,
+} from '../src/scanner';
 
 const POOL_ADDRESS = '0x0000000000000000000000000000000000000001' as Address;
 
@@ -95,6 +99,75 @@ describe('scanner RPC log handling', () => {
     expect(result.get(111n)).toEqual({
       withdrawnValue: 222n,
       newCommitment: 333n,
+      blockNumber: 204n,
+    });
+  });
+
+  it('requests Withdrawn logs with the canonical 0xbow argument order', async () => {
+    const getLogs = vi.fn().mockResolvedValue([]);
+    const client = {
+      getBlockNumber: vi.fn(),
+      getLogs,
+    } as unknown as PublicClient;
+
+    await scanPoolWithdrawals(client, POOL_ADDRESS, 200n, 210n, 50n);
+
+    expect(getLogs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          name: 'Withdrawn',
+          inputs: [
+            { name: '_processooor', type: 'address', indexed: true },
+            { name: '_value', type: 'uint256', indexed: false },
+            { name: '_spentNullifier', type: 'uint256', indexed: false },
+            { name: '_newCommitment', type: 'uint256', indexed: false },
+          ],
+        }),
+      })
+    );
+  });
+
+  it('scans ragequits by commitment with block metadata', async () => {
+    const getLogs = vi.fn().mockResolvedValue([
+      {
+        args: {
+          _commitment: 111n,
+          _label: 222n,
+          _value: 333n,
+        },
+        blockNumber: 204n,
+      },
+    ]);
+    const client = {
+      getBlockNumber: vi.fn(),
+      getLogs,
+    } as unknown as PublicClient;
+
+    const result = await scanPoolRagequits(
+      client,
+      POOL_ADDRESS,
+      200n,
+      210n,
+      50n
+    );
+
+    expect(getLogs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          name: 'Ragequit',
+          inputs: [
+            { name: '_ragequitter', type: 'address', indexed: true },
+            { name: '_commitment', type: 'uint256', indexed: false },
+            { name: '_label', type: 'uint256', indexed: false },
+            { name: '_value', type: 'uint256', indexed: false },
+          ],
+        }),
+      })
+    );
+    expect(result.get(111n)).toEqual({
+      commitment: 111n,
+      label: 222n,
+      value: 333n,
       blockNumber: 204n,
     });
   });

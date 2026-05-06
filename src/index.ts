@@ -16,10 +16,12 @@ export {
   scanPoolEvents,
   findDepositsByAddress,
   scanPoolWithdrawals,
+  scanPoolRagequits,
   getPoolState,
   type ScanResult,
   type DepositRecord,
   type WithdrawalRecord,
+  type RagequitRecord,
 } from './scanner.js';
 
 // Proof generation

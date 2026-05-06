@@ -8,8 +8,19 @@ export const ENTRYPOINT_ABI = [
     type: 'function',
     name: 'deposit',
     stateMutability: 'payable',
-    inputs: [{ name: 'precommitment', type: 'uint256' }],
-    outputs: [],
+    inputs: [{ name: '_precommitment', type: 'uint256' }],
+    outputs: [{ name: '_commitment', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'deposit',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: '_asset', type: 'address' },
+      { name: '_value', type: 'uint256' },
+      { name: '_precommitment', type: 'uint256' },
+    ],
+    outputs: [{ name: '_commitment', type: 'uint256' }],
   },
   {
     type: 'function',
@@ -30,10 +41,10 @@ export const ENTRYPOINT_ABI = [
     name: 'assetConfig',
     inputs: [{ name: '_asset', type: 'address' }],
     outputs: [
-      { name: 'pool', type: 'address' },
-      { name: 'minimumDepositAmount', type: 'uint256' },
-      { name: 'vettingFeeBPS', type: 'uint256' },
-      { name: 'maxRelayFeeBPS', type: 'uint256' },
+      { name: '_pool', type: 'address' },
+      { name: '_minimumDepositAmount', type: 'uint256' },
+      { name: '_vettingFeeBPS', type: 'uint256' },
+      { name: '_maxRelayFeeBPS', type: 'uint256' },
     ],
     stateMutability: 'view',
   },
@@ -93,9 +104,9 @@ export const POOL_ABI = [
     name: 'Ragequit',
     inputs: [
       { name: '_ragequitter', type: 'address', indexed: true },
+      { name: '_commitment', type: 'uint256', indexed: false },
+      { name: '_label', type: 'uint256', indexed: false },
       { name: '_value', type: 'uint256', indexed: false },
-      { name: '_spentNullifier', type: 'uint256', indexed: false },
-      { name: '_newCommitment', type: 'uint256', indexed: false },
     ],
   },
   {
@@ -112,7 +123,7 @@ export const POOL_ABI = [
     name: 'withdraw',
     inputs: [
       {
-        name: '_withdrawal',
+        name: '_w',
         type: 'tuple',
         components: [
           { name: 'processooor', type: 'address' },
@@ -120,7 +131,7 @@ export const POOL_ABI = [
         ],
       },
       {
-        name: '_proof',
+        name: '_p',
         type: 'tuple',
         components: [
           { name: 'pA', type: 'uint256[2]' },
@@ -138,7 +149,7 @@ export const POOL_ABI = [
     name: 'ragequit',
     inputs: [
       {
-        name: '_proof',
+        name: '_p',
         type: 'tuple',
         components: [
           { name: 'pA', type: 'uint256[2]' },
@@ -155,28 +166,28 @@ export const POOL_ABI = [
     type: 'function',
     name: 'currentRoot',
     inputs: [],
-    outputs: [{ type: 'uint256' }],
+    outputs: [{ name: '_root', type: 'uint256' }],
     stateMutability: 'view',
   },
   {
     type: 'function',
     name: 'SCOPE',
     inputs: [],
-    outputs: [{ type: 'uint256' }],
+    outputs: [{ name: '_scope', type: 'uint256' }],
     stateMutability: 'view',
   },
   {
     type: 'function',
     name: 'currentTreeSize',
     inputs: [],
-    outputs: [{ type: 'uint256' }],
+    outputs: [{ name: '_size', type: 'uint256' }],
     stateMutability: 'view',
   },
   {
     type: 'function',
     name: 'ASSET',
     inputs: [],
-    outputs: [{ type: 'address' }],
+    outputs: [{ name: '_asset', type: 'address' }],
     stateMutability: 'view',
   },
 ] as const;

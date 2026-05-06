@@ -5,7 +5,7 @@
  * and recover deposit metadata. Used for both normal operation and recovery.
  */
 
-import type { Address, PublicClient } from 'viem';
+import type { AbiEvent, Address, PublicClient } from 'viem';
 import { POOL_ABI } from './abi.js';
 
 export interface DepositRecord {
@@ -29,6 +29,21 @@ export interface WithdrawalRecord {
   blockNumber?: bigint;
 }
 
+/**
+ * Record of a ragequit, parsed from a Ragequit event.
+ * Used to mark deposits recovered directly from the pool.
+ */
+export interface RagequitRecord {
+  /** Original commitment hash that was ragequit. */
+  commitment: bigint;
+  /** Deposit label associated with the commitment. */
+  label: bigint;
+  /** Amount recovered by ragequit. */
+  value: bigint;
+  /** Block number where the Ragequit event was emitted, when available. */
+  blockNumber?: bigint;
+}
+
 export interface ScanResult {
   /** All state tree leaves in insertion order. */
   leaves: bigint[];
@@ -36,38 +51,22 @@ export interface ScanResult {
   depositsByPrecommitment: Map<bigint, DepositRecord>;
 }
 
-const LEAF_INSERTED_EVENT = {
-  type: 'event' as const,
-  name: 'LeafInserted',
-  inputs: [
-    { name: '_index', type: 'uint256', indexed: false },
-    { name: '_leaf', type: 'uint256', indexed: false },
-    { name: '_root', type: 'uint256', indexed: false },
-  ],
-};
+function poolEvent(name: string): AbiEvent {
+  const event = POOL_ABI.find((entry) => {
+    return entry.type === 'event' && entry.name === name;
+  });
 
-const DEPOSITED_EVENT = {
-  type: 'event' as const,
-  name: 'Deposited',
-  inputs: [
-    { name: '_depositor', type: 'address', indexed: true },
-    { name: '_commitment', type: 'uint256', indexed: false },
-    { name: '_label', type: 'uint256', indexed: false },
-    { name: '_value', type: 'uint256', indexed: false },
-    { name: '_precommitmentHash', type: 'uint256', indexed: false },
-  ],
-};
+  if (!event) {
+    throw new Error(`Missing pool event ABI: ${name}`);
+  }
 
-const WITHDRAWN_EVENT = {
-  type: 'event' as const,
-  name: 'Withdrawn',
-  inputs: [
-    { name: '_withdrawer', type: 'address', indexed: true },
-    { name: '_spentNullifier', type: 'uint256', indexed: false },
-    { name: '_value', type: 'uint256', indexed: false },
-    { name: '_newCommitment', type: 'uint256', indexed: false },
-  ],
-};
+  return event as AbiEvent;
+}
+
+const LEAF_INSERTED_EVENT = poolEvent('LeafInserted');
+const DEPOSITED_EVENT = poolEvent('Deposited');
+const WITHDRAWN_EVENT = poolEvent('Withdrawn');
+const RAGEQUIT_EVENT = poolEvent('Ragequit');
 
 type EventLog = {
   args?: Record<string, unknown>;
@@ -309,6 +308,52 @@ export async function scanPoolWithdrawals(
   }
 
   return withdrawalsByNullifier;
+}
+
+/**
+ * Scan a range of blocks for Ragequit events.
+ *
+ * @returns Ragequits keyed by commitment hash.
+ */
+export async function scanPoolRagequits(
+  client: PublicClient,
+  poolAddress: Address,
+  fromBlock: bigint,
+  toBlock: bigint,
+  chunkSize = 1000n,
+  onProgress?: (scanned: bigint, total: bigint) => void
+): Promise<Map<bigint, RagequitRecord>> {
+  const ragequitsByCommitment = new Map<bigint, RagequitRecord>();
+  const totalBlocks = toBlock - fromBlock;
+
+  for (let start = fromBlock; start <= toBlock; start += chunkSize) {
+    const end = chunkEnd(start, toBlock, chunkSize);
+
+    if (onProgress) {
+      onProgress(start - fromBlock, totalBlocks);
+    }
+
+    const result = await getLogsWithHeadClamp(client, {
+      address: poolAddress,
+      event: RAGEQUIT_EVENT,
+      fromBlock: start,
+      toBlock: end,
+    });
+
+    for (const e of result.logs) {
+      const args = e.args as any;
+      ragequitsByCommitment.set(args._commitment as bigint, {
+        commitment: args._commitment as bigint,
+        label: args._label as bigint,
+        value: args._value as bigint,
+        blockNumber: e.blockNumber ?? undefined,
+      });
+    }
+
+    if (result.clamped) break;
+  }
+
+  return ragequitsByCommitment;
 }
 
 /**
